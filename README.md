@@ -1,7 +1,24 @@
 # STMple TX
-STM32 Port of the Simple TX Arduino Transmitter code, with a few extra features
+STM32 Port of the Simple TX Arduino Transmitter project, with a few extra features.
 
-Simple TX is an Arduino based ELRS RC transmitter TX by Kkbin505. He designed an RC transmitter (soft and hardware) that is simple to build, and use arduino board
+Simple TX is an Arduino based ELRS RC transmitter TX by Kkbin505. He designed an RC transmitter (soft and hardware) that is simple to build, and use.
+
+I am rewriting it to run on an STM32 F411CE "Black Pill" and hopefully also on an ESP32 C3. Since we now have extra UARTs, and even OLED screens, i am reading telemetry from the ELRS module, to display, and modify as required. I already have a fork of his project to add ELRS 3.x support, so this is a 'new' repository (large swathes are being rewritten).
+
+# THIS IS A W.I.P.
+Currently untested. ELRS transmitter telemetry isnt working that well
+
+Programmed in Arduino IDE since that is simple. 
+1. Install the STM32 MCU Based Boards by STMicroelectronics via board manager
+2. then select STM32 MCU Based boards -> Generic STM32F4 Series.
+3. Board Part Number is BlackPill F411CE
+4. I am programming using ST-LINK V2, because Weact Blackpill has lots of problems going into DFU mode - Install the STM32Cube Programmer app, and then select Upload Method STM32CubeProgrammer (SWD)
+5. USB Support set to CDC (Generic 'Serial' supersede U(S)ART)
+6. U(S)ART Support set to Enabled (Generic 'Serial')
+
+
+
+
 
 ![微信图片_20220213205906](https://user-images.githubusercontent.com/43392862/153756463-16c5e99b-b1b6-4f23-9fea-cefb4bb9df04.jpg)
 
