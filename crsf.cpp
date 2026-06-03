@@ -128,8 +128,8 @@ void CRSF::crsfSendChannels(int16_t channels[]) {
      * 173-1811 with middle at 992 S.BUS protocol requires
     */
 
-    // packet[0] = UART_SYNC; //Header
-    packet[0] = ELRS_ADDRESS; // Header
+    packet[0] = SYNC_BYTE; //This needs to be 0xC8 so the module recognizes it as an RC channel frame
+    // packet[0] = ELRS_ADDRESS; // Header
     packet[1] = 24;           // length of type (24) + payload + crc
     packet[2] = TYPE_CHANNELS;
     packet[3] = (uint8_t)(channels[0] & 0x07FF);
@@ -186,8 +186,8 @@ void CRSF::crsfPingDevices() {
     packetCmd[3] = 0x00; // Destination Address (0x00 = Parameter Broadcast Request)
     packetCmd[4] = ADDR_RADIO; // Source Address (0xEA = Radio Handset Transmitter)
     packetCmd[5] = crsf_crc8(&packetCmd[2], packetCmd[1] - 1);  //crc
-    //crsfWritePacket(packetCmd, 6);
-    crsfQueuePacket(packetCmd, 6);
+    crsfWritePacket(packetCmd, 6); // Needs to be sent direcly, as crsfInitModule() is gated on !commandQueue.hasItems()
+    // crsfQueuePacket(packetCmd, 6);
     // Serial.print("0x"); Serial.print(packetCmd[0],HEX);
     // Serial.print(", 0x"); Serial.print(packetCmd[1],HEX);
     // Serial.print(", 0x"); Serial.print(packetCmd[2],HEX);
@@ -202,7 +202,7 @@ void CRSF::crsfRequestSetting(uint8_t settingIndex, uint8_t chunk) {
     packetCmd[0] = ELRS_ADDRESS;        // 0xEE (Target Device: External TX Module)
     packetCmd[1] = 6;                   // LENGTH: 7 Bytes remaining (Type + 5 Payload Bytes + 1 CRC)
     packetCmd[2] = ELRS_SETTINGS_READ;  // 0x2C (CRSF_FRAMETYPE_PARAMETER_READ)
-    packetCmd[3] = 0xEF; // ELRS_ADDRESS;        // Destination Address: 0xEE (The Module itself)
+    packetCmd[3] = ELRS_ADDRESS;        // Destination Address: 0xEE (The Module itself)
     packetCmd[4] = ADDR_RADIO;          // Source/Origin Address: 0xEA (Your Transmitter Handset)
     packetCmd[5] = settingIndex;        // Parameter Index position to read (1, 2, 3...)
     packetCmd[6] = chunk;               // Value Chunk Offset parameter
@@ -247,7 +247,7 @@ void CRSF::crsfWritePacket(uint8_t packet[], uint8_t packetLength) {
     ELRS_PORT.write(packet, packetLength);
     if (ELRS_PORT.isHalfDuplex()) {
       // CRITICAL for Half-Duplex: If you don't flush, your incoming listening code will get corrupted by your own echo.
-      //ELRS_PORT.flush();
+      ELRS_PORT.flush();
       ELRS_PORT.enableHalfDuplexRx();
     }
 }
@@ -270,7 +270,7 @@ void CRSF::crsfReadPacket() {
 
     switch (currentState) {
       case FIND_ADDRESS:
-        if (incomingByte == ADDR_RADIO || incomingByte == ADDR_BROADCAST || incomingByte == SYNC_BYTE) { // Addressed to the Radio (from ELRS Module)
+        if (incomingByte == ADDR_RADIO || incomingByte == SYNC_BYTE) { // Addressed to the Radio (from ELRS Module)
           rxBuffer[0] = incomingByte;
           rxIndex = 1;
           currentState = GET_LENGTH;
@@ -356,7 +356,7 @@ void CRSF::crsfParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
   memset(txModule.name, 0, sizeof(txModule.name)); 
 
   // Step A: Parse out the Device Name characters starting at Index 5
-  uint8_t currentIdx = 5;
+  uint8_t currentIdx = 4; // 0 indexed, should start at 4
   uint8_t charCount = 0;
   
   // Extract up to the null-terminator divider boundary
@@ -371,20 +371,20 @@ void CRSF::crsfParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
   // Step C: Ensure we have enough remaining bytes left inside the frame payload to read metadata bounds
   if (currentIdx + 14 <= (length + 2)) {
     // Extract 32-bit values (Sent in Big-Endian format over the CRSF bus)
+    txModule.serialNumber[0] = rxBuffer[currentIdx++];
     txModule.serialNumber[1] = rxBuffer[currentIdx++];
     txModule.serialNumber[2] = rxBuffer[currentIdx++];
     txModule.serialNumber[3] = rxBuffer[currentIdx++];
-    txModule.serialNumber[4] = rxBuffer[currentIdx++];
 
+    txModule.hwVersion[0] = rxBuffer[currentIdx++];
     txModule.hwVersion[1] = rxBuffer[currentIdx++];
     txModule.hwVersion[2] = rxBuffer[currentIdx++];
     txModule.hwVersion[3] = rxBuffer[currentIdx++];
-    txModule.hwVersion[4] = rxBuffer[currentIdx++];
     
+    txModule.swVersion[0] = rxBuffer[currentIdx++];
     txModule.swVersion[1] = rxBuffer[currentIdx++];
     txModule.swVersion[2] = rxBuffer[currentIdx++];
     txModule.swVersion[3] = rxBuffer[currentIdx++];
-    txModule.swVersion[4] = rxBuffer[currentIdx++];
 
     // Extract the final configuration structural control tags
     totalSettingsCount = rxBuffer[currentIdx++]; 
@@ -400,9 +400,9 @@ void CRSF::crsfParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
     }
     Serial.println();
     Serial.print("Module Name         : "); Serial.println(txModule.name);
-    Serial.print("Serial number       : "); Serial.print((char)txModule.serialNumber[1]); Serial.print((char)txModule.serialNumber[2]); Serial.print((char)txModule.serialNumber[3]); Serial.println((char)txModule.serialNumber[4]); 
-    Serial.print("Hardware Version    : "); Serial.print(txModule.hwVersion[1], HEX); Serial.print(txModule.hwVersion[2], HEX); Serial.print(txModule.hwVersion[3], HEX); Serial.println(txModule.hwVersion[4], HEX); 
-    Serial.print("Firmware Version    : "); Serial.print(txModule.swVersion[1], HEX); Serial.print(txModule.swVersion[2], HEX); Serial.print(txModule.swVersion[3], HEX); Serial.println(txModule.swVersion[4], HEX); 
+    Serial.print("Serial number       : "); Serial.print((char)txModule.serialNumber[0]); Serial.print((char)txModule.serialNumber[1]); Serial.print((char)txModule.serialNumber[2]); Serial.println((char)txModule.serialNumber[3]); 
+    Serial.print("Hardware Version    : "); Serial.print(txModule.hwVersion[0], HEX); Serial.print(txModule.hwVersion[1], HEX); Serial.print(txModule.hwVersion[2], HEX); Serial.println(txModule.hwVersion[3], HEX); 
+    Serial.print("Firmware Version    : "); Serial.print(txModule.swVersion[0], HEX); Serial.print(txModule.swVersion[1], HEX); Serial.print(txModule.swVersion[2], HEX); Serial.println(txModule.swVersion[3], HEX); 
     Serial.print("Available Settings  : "); Serial.print(totalSettingsCount); Serial.println(" Menu Items");
     Serial.print("Protocol Version    : "); Serial.println(txModule.protocolVersion);
     Serial.println("================================================\n");
@@ -424,6 +424,8 @@ void CRSF::clearModule() {
     }
     txModule.paramCount = 0;
     txModule.paramsLoaded = false;
+    moduleInfoReceived = false;
+    moduleStatusReceived = false;
     // serialNumber, hwVersion, swVersion, protocolVersion will be reset when a module is next detected
 }
 
@@ -632,6 +634,11 @@ void CRSF::crsfParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
 }
 
 void CRSF::crsfParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
+    // rxBuffer[3] = destination (handset, 0xEF/0xEA), rxBuffer[4] = source (TX module, 0xEE).
+    // Discard frames not originating from the ELRS TX module address.
+    if (rxBuffer[4] != ELRS_ADDRESS) {
+        return;
+    }
     elrsStatus.packetsBad  = rxBuffer[5];
     elrsStatus.packetsGood = ((uint16_t)rxBuffer[6] << 8) | rxBuffer[7]; 
     uint8_t rawFlags = rxBuffer[8]; 
@@ -670,17 +677,17 @@ void CRSF::crsfParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
 
 void CRSF::crsfParseElrsSyncPacket(uint8_t rxBuffer[]) {
     // Ensure the packet matches the OpenTX Sync Subtype
-    if (rxBuffer[1] >= 9 && rxBuffer[3] == CRSF_SUBTYPE_OPENTX_SYNC) {      
+    if (rxBuffer[1] >= 9 && rxBuffer[4] == CRSF_SUBTYPE_OPENTX_SYNC) {      
         // Extract 32-bit Big-Endian Rate Interval (bytes 1-4 of payload)
-        uint32_t rawInterval = ((uint32_t)rxBuffer[4] << 24) | 
-                               ((uint32_t)rxBuffer[5] << 16) | 
-                               ((uint32_t)rxBuffer[6] << 8)  | 
-                                rxBuffer[7];
+        uint32_t rawInterval = ((uint32_t)rxBuffer[5] << 24) | 
+                               ((uint32_t)rxBuffer[6] << 16) | 
+                               ((uint32_t)rxBuffer[7] << 8)  | 
+                                rxBuffer[8];
         // Extract 32-bit Signed Big-Endian Phase Shift (bytes 5-8 of payload)
-        int32_t rawShift = ((int32_t)rxBuffer[8] << 24) | 
-                           ((int32_t)rxBuffer[9] << 16) | 
-                           ((int32_t)rxBuffer[10] << 8)  | 
-                            rxBuffer[11];
+        int32_t rawShift = ((int32_t)rxBuffer[9] << 24) | 
+                           ((int32_t)rxBuffer[10] << 16) | 
+                           ((int32_t)rxBuffer[11] << 8)  | 
+                            rxBuffer[12];
         // ExpressLRS scales microsecond telemetry values by 10
         targetIntervalUs   = (uint32_t)((float)rawInterval * 0.1f);
         currentPhaseShift  = (int32_t)((float)rawShift * 0.1f);
@@ -768,6 +775,10 @@ void CRSF::crsfInitModule() {
             break;
 
         case ELRS_CONNECTED:
+            if (now - lastLinkStatRequestTime > 1000) {
+                lastLinkStatRequestTime = now;
+                crsfRequestElrsStatus();
+            }
             if (parameterDiscoveryActive) {
                 if (now - lastParameterQueryTime > 400) {
                     lastParameterQueryTime = now;
@@ -803,4 +814,4 @@ void serialEvent1() {
   while (ELRS_PORT.available() > 0) {
     crsfClass.addByteToRingBuffer(ELRS_PORT.read());
   }
-}
+}

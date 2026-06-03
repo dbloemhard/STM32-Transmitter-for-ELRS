@@ -857,9 +857,7 @@ void loop()
 
             // Send commands to initiate module after 3 seconds, if not already done
             if (!crsfClass.ready && millis() > 3000) {
-                if (!crsfClass.commandQueue.hasItems()) {
-                    crsfClass.crsfInitModule();
-                }
+                crsfClass.crsfInitModule();
             }   
             
             // Command packet interleaving
