@@ -240,7 +240,10 @@ private:
    uint8_t totalSettingsCount;
 
    uint32_t lastValidFrameTime = 0;   
-   uint32_t lastLinkStatsFrameTime = 0;   
+   uint32_t lastLinkStatsFrameTime = 0;
+   uint32_t lastValidFrameTime = 0;
+   uint32_t lastLinkStatsFrameTime = 0;
+   uint32_t lastLinkStatRequestTime = 0;
 
    void crsfQueuePacket(uint8_t packet[], uint8_t packetLength);
    void crsfWritePacket(uint8_t packet[], uint8_t packetLength);
