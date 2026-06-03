@@ -768,6 +768,10 @@ void CRSF::crsfInitModule() {
             break;
 
         case ELRS_CONNECTED:
+            if (now - lastLinkStatRequestTime > 1000) {
+                lastLinkStatRequestTime = now;
+                crsfRequestElrsStatus();
+            }
             if (parameterDiscoveryActive) {
                 if (now - lastParameterQueryTime > 400) {
                     lastParameterQueryTime = now;
@@ -803,4 +807,4 @@ void serialEvent1() {
   while (ELRS_PORT.available() > 0) {
     crsfClass.addByteToRingBuffer(ELRS_PORT.read());
   }
-}
+}
