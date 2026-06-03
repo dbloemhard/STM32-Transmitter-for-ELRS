@@ -239,8 +239,6 @@ private:
    uint8_t chunksRemaining = 0;
    uint8_t totalSettingsCount;
 
-   uint32_t lastValidFrameTime = 0;   
-   uint32_t lastLinkStatsFrameTime = 0;
    uint32_t lastValidFrameTime = 0;
    uint32_t lastLinkStatsFrameTime = 0;
    uint32_t lastLinkStatRequestTime = 0;
