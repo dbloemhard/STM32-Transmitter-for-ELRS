@@ -44,6 +44,8 @@
 #define SERIAL_BAUDRATE                 400000
 #define CRSF_TIME_BETWEEN_FRAMES_US     1666 // 1.6 ms 500Hz
 #define CRSF_PAYLOAD_OFFSET             offsetof(crsfFrameDef_t, type)
+#define CRSF_MAX_PACKET_SIZE            64
+#define CRSF_QUEUE_SIZE                 8  // Must be a power of 2 (2, 4, 8, 16) for fast masking
 #define CRSF_MSP_RX_BUF_SIZE            128
 #define CRSF_MSP_TX_BUF_SIZE            128
 #define CRSF_PAYLOAD_SIZE_MAX           60
@@ -54,7 +56,9 @@
 #define CRSF_TLM_PACKET_SIZE            10
 #define CRSF_MAX_PARAMS                 16
 #define CRSF_MAX_STRING_LEN             32
-
+#define CRSF_SUBTYPE_OPENTX_SYNC        0x10
+// PI Controller Gain for clock steering (0.05 is a safe, smooth starting point)
+#define CRSF_SYNC_KP                    0.05f 
 
 // ELRS telem packets
 #define ELRS_LINK_STATS                 0x14
@@ -64,6 +68,7 @@
 #define ELRS_SETTINGS_READ              0x2C
 #define ELRS_HEARTBEAT                  0x2D
 #define ELRS_STATUS                     0x2E
+#define ELRS_FRAMETYPE_RADIO_ID         0x3A
 
 // ELRS command
 #define ELRS_ADDRESS                    0xEE
@@ -79,9 +84,57 @@
 #define ELRS_START_COMMAND              0x04
 #define ELRS_SETTINGS_WRITE             0x2D
 #define ADDR_RADIO                      0xEA //  Radio Transmitter
+#define SYNC_BYTE                       0xC8
+#define ADDR_BROADCAST                  0x00
 
 // ELRS module Serial1
 extern HardwareSerial ELRS_PORT;
+
+// Structure to hold an individual raw command packet
+struct crsfPacket {
+    uint8_t length;
+    uint8_t data[CRSF_MAX_PACKET_SIZE];
+};
+
+class crsfCommandQueue {
+private:
+    crsfPacket _buffer[CRSF_QUEUE_SIZE];
+    volatile uint8_t _head; // Points to the next write slot
+    volatile uint8_t _tail; // Points to the next read slot
+    // Mask helper for ultra-fast ring wrapping without using slow modulo (%) math
+    static const uint8_t _mask = CRSF_QUEUE_SIZE - 1;
+
+public:
+    crsfCommandQueue() : _head(0), _tail(0) {}
+
+    // Check if queue has data
+    bool hasItems() {return _head != _tail;}
+
+    // Push a raw packet into the queue
+    bool push(const uint8_t* rawData, uint8_t len) {
+        if (len > CRSF_MAX_PACKET_SIZE) return false; // Safety check
+
+        uint8_t nextHead = (_head + 1) & _mask;
+        if (nextHead == _tail) {
+            return false; // Queue Overflow (Full)
+        }
+        _buffer[_head].length = len;
+        memcpy(_buffer[_head].data, rawData, len);
+        _head = nextHead; // Atomic index advance
+        return true;
+    }
+
+    // Pull the next packet out of the queue
+    bool pop(crsfPacket& outPacket) {
+        if (_head == _tail) {
+            return false; // Queue Underflow (Empty)
+        }
+        outPacket = _buffer[_tail];
+        _tail = (_tail + 1) & _mask; // Atomic index advance
+        return true;
+    }
+};
+
 
 struct crsfLinkStats {
   int16_t uplinkRssi1;     // Antenna 1 RSSI (converted to negative dBm)
@@ -126,9 +179,9 @@ struct crsfElrsStatus {
 
 struct crsfModule {
    char name[CRSF_MAX_STRING_LEN];
-   uint32_t serialNumber[4];
-   uint32_t hwVersion[4];
-   uint32_t swVersion[4];
+   uint8_t serialNumber[4];
+   uint8_t hwVersion[4];
+   uint8_t swVersion[4];
    uint8_t paramCount;
    uint8_t protocolVersion;
    bool paramsLoaded;
@@ -152,15 +205,18 @@ public:
    bool telemetryActive = false;
    bool ready = false;
    crsfModule txModule;
+   crsfCommandQueue commandQueue;
 
    // Methods
    void begin(uint32_t rxPin, uint32_t txPin, bool halfDuplex);
    void crsfSendChannels(int16_t channels[]);
+   void crsfSendPendingCommand();  // Send one command from command queue
    void crsfSendCommand(uint8_t command, uint8_t value);
    void crsfCheckTelemetry();
    void crsfInitModule();
+   uint32_t crsfNextInterval();
 
-   // Static ring buffer handlers that the global ISR can access
+   // Static ring buffer handler that the global ISR can access
    static void addByteToRingBuffer(uint8_t incomingByte);
 private:
    // Lock-free ring buffer variables shared with the ISR
@@ -168,6 +224,11 @@ private:
    static volatile uint16_t ringBufferHead;
    static volatile uint16_t ringBufferTail;
 
+   // Variables to track sync offsets
+   volatile int32_t currentPhaseShift;
+   volatile uint32_t targetIntervalUs;
+   volatile bool syncPacketReceived;
+   
    enum crsfConnectState {ELRS_PINGING, ELRS_SUBSCRIBING, ELRS_CONNECTED};
    crsfConnectState connectionState = ELRS_PINGING;
    uint32_t lastHandshakeTime = 0;   
@@ -181,6 +242,7 @@ private:
    uint32_t lastValidFrameTime = 0;   
    uint32_t lastLinkStatsFrameTime = 0;   
 
+   void crsfQueuePacket(uint8_t packet[], uint8_t packetLength);
    void crsfWritePacket(uint8_t packet[], uint8_t packetLength);
    void crsfReadPacket();
    void crsfPingDevices();
@@ -190,6 +252,8 @@ private:
    void crsfParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length);
    void crsfParseSettingsPacket(uint8_t rxBuffer[], uint8_t length);   
    void crsfParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length);
+   void crsfParseElrsSyncPacket(uint8_t rxBuffer[]);
+
    int getParamSlot(uint8_t id); 
    uint8_t parseChoicesString(int slot, uint8_t* buffer, uint8_t startIdx, uint8_t maxLen);
    void clearModule();

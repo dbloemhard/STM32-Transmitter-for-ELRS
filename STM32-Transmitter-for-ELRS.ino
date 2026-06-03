@@ -747,12 +747,12 @@ void setup()
     // Serial output over USB (Uart6)
     Serial.begin(115200);
 
-    // CRSF over Uart1
-    #ifdef ELRS_HALF_DUPLEX
-        crsfClass.begin(ELRS_RX, ELRS_TX, true);
-    #else
-        crsfClass.begin(ELRS_RX, ELRS_TX, false);
-    #endif
+// CRSF over Uart1
+#ifdef ELRS_HALF_DUPLEX
+    crsfClass.begin(ELRS_RX, ELRS_TX, true);
+#else
+    crsfClass.begin(ELRS_RX, ELRS_TX, false);
+#endif
     
     // Start SBUS port
     //Serial2.setRx(RX2);
@@ -848,17 +848,24 @@ void loop()
                     crsfClass.crsfSendCommand(ELRS_DYNAMIC_POWER_COMMAND, currentDynamic);
                 }
                 loopCount++;
-            } else {
+            } 
+            else {
                 // crsfClass.crsfPrepareDataPacket(crsfPacket, rcChannels);
                 // crsfClass.crsfWritePacket(crsfPacket, CRSF_PACKET_SIZE);
                 crsfClass.crsfSendChannels(rcChannels);
             }
 
-            // Send commands to initiate module, if not already done
-            if (!crsfClass.ready) {
-                crsfClass.crsfInitModule();
+            // Send commands to initiate module after 3 seconds, if not already done
+            if (!crsfClass.ready && millis() > 3000) {
+                if (!crsfClass.commandQueue.hasItems()) {
+                    crsfClass.crsfInitModule();
+                }
             }   
-            crsfTime = currentMicros + CRSF_TIME_BETWEEN_FRAMES_US;
+            
+            // Command packet interleaving
+            crsfClass.crsfSendPendingCommand();
+
+            crsfTime = currentMicros + crsfClass.crsfNextInterval(); //CRSF_TIME_BETWEEN_FRAMES_US;
         }
             
         /*
