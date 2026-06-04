@@ -129,9 +129,9 @@ void CRSF::crsfSendChannels(int16_t channels[]) {
     */
 
     // packet[0] = UART_SYNC; //Header
-    packet[0] = ELRS_ADDRESS; // Header
+    packet[0] = MODULE_ADDRESS; // Header
     packet[1] = 24;           // length of type (24) + payload + crc
-    packet[2] = TYPE_CHANNELS;
+    packet[2] = ELRS_CHANNELS;
     packet[3] = (uint8_t)(channels[0] & 0x07FF);
     packet[4] = (uint8_t)((channels[0] & 0x07FF) >> 8 | (channels[1] & 0x07FF) << 3);
     packet[5] = (uint8_t)((channels[1] & 0x07FF) >> 5 | (channels[2] & 0x07FF) << 6);
@@ -164,11 +164,11 @@ void CRSF::crsfSendChannels(int16_t channels[]) {
 void CRSF::crsfSendCommand(uint8_t command, uint8_t value) {
     uint8_t packetCmd[CRSF_CMD_PACKET_SIZE];
 
-    packetCmd[0] = ELRS_ADDRESS;
+    packetCmd[0] = MODULE_ADDRESS;
     packetCmd[1] = 6; // length of Command (4) + payload + crc
     packetCmd[2] = ELRS_SETTINGS_WRITE;
-    packetCmd[3] = ELRS_ADDRESS; // Destination Address (0x00 = Parameter Broadcast Request)
-    packetCmd[4] = ADDR_RADIO; // Source Address (0xEA = Radio Handset Transmitter)
+    packetCmd[3] = MODULE_ADDRESS; // Destination Address (0x00 = Parameter Broadcast Request)
+    packetCmd[4] = HANDSET_ADDRESS; // Source Address (0xEA = Radio Handset Transmitter)
     packetCmd[5] = command;
     packetCmd[6] = value;
     packetCmd[7] = crsf_crc8(&packetCmd[2], packetCmd[1] - 1); // CRC
@@ -180,30 +180,24 @@ void CRSF::crsfSendCommand(uint8_t command, uint8_t value) {
 void CRSF::crsfPingDevices() {
     uint8_t packetCmd[6];
 
-    packetCmd[0] = ELRS_ADDRESS;
+    packetCmd[0] = MODULE_ADDRESS;
     packetCmd[1] = 4; // length of Command (2) + payload + crc
     packetCmd[2] = ELRS_DEVICE_PING; 
-    packetCmd[3] = 0x00; // Destination Address (0x00 = Parameter Broadcast Request)
-    packetCmd[4] = ADDR_RADIO; // Source Address (0xEA = Radio Handset Transmitter)
+    packetCmd[3] = BROADCAST_ADDRESS; // Destination Address (0x00 = Parameter Broadcast Request)
+    packetCmd[4] = HANDSET_ADDRESS; // Source Address (0xEA = Radio Handset Transmitter)
     packetCmd[5] = crsf_crc8(&packetCmd[2], packetCmd[1] - 1);  //crc
     //crsfWritePacket(packetCmd, 6);
     crsfQueuePacket(packetCmd, 6);
-    // Serial.print("0x"); Serial.print(packetCmd[0],HEX);
-    // Serial.print(", 0x"); Serial.print(packetCmd[1],HEX);
-    // Serial.print(", 0x"); Serial.print(packetCmd[2],HEX);
-    // Serial.print(", 0x"); Serial.print(packetCmd[3],HEX);
-    // Serial.print(", 0x"); Serial.print(packetCmd[4],HEX);
-    // Serial.print(", 0x"); Serial.print(packetCmd[5],HEX);
 }
 
 void CRSF::crsfRequestSetting(uint8_t settingIndex, uint8_t chunk) {
     uint8_t packetCmd[8];
 
-    packetCmd[0] = ELRS_ADDRESS;        // 0xEE (Target Device: External TX Module)
+    packetCmd[0] = MODULE_ADDRESS;        // 0xEE (Target Device: External TX Module)
     packetCmd[1] = 6;                   // LENGTH: 7 Bytes remaining (Type + 5 Payload Bytes + 1 CRC)
     packetCmd[2] = ELRS_SETTINGS_READ;  // 0x2C (CRSF_FRAMETYPE_PARAMETER_READ)
-    packetCmd[3] = 0xEF; // ELRS_ADDRESS;        // Destination Address: 0xEE (The Module itself)
-    packetCmd[4] = ADDR_RADIO;          // Source/Origin Address: 0xEA (Your Transmitter Handset)
+    packetCmd[3] = MODULE_ADDRESS;        // Destination Address: 0xEE (The Module itself)
+    packetCmd[4] = LUA_SCRIPT_ADDRESS; // HANDSET_ADDRESS;          // Source/Origin Address: 0xEA (Your Transmitter Handset) or 0xEF ELRS_LUA
     packetCmd[5] = settingIndex;        // Parameter Index position to read (1, 2, 3...)
     packetCmd[6] = chunk;               // Value Chunk Offset parameter
     packetCmd[7] = crsf_crc8(&packetCmd[2], packetCmd[1] - 1);  // crc
@@ -215,6 +209,14 @@ void CRSF::crsfRequestSetting(uint8_t settingIndex, uint8_t chunk) {
     Serial.print(settingIndex);
     Serial.print(", chunk: ");
     Serial.print(chunk); Serial.println();
+    Serial.print("0x"); Serial.print(packetCmd[0],HEX);
+    Serial.print(" "); Serial.print(packetCmd[1],HEX);
+    Serial.print(" "); Serial.print(packetCmd[2],HEX);
+    Serial.print(" "); Serial.print(packetCmd[3],HEX);
+    Serial.print(" "); Serial.print(packetCmd[4],HEX);
+    Serial.print(" "); Serial.print(packetCmd[5],HEX);
+    Serial.print(" "); Serial.print(packetCmd[6],HEX);
+    Serial.print(" "); Serial.println(packetCmd[7],HEX);
 }
 
 // Request Info Message by sending ELRS_SETTINGS_WRITE (0x2D) with param/value 0
@@ -232,6 +234,10 @@ void CRSF::crsfSendPendingCommand() {
             // if (ELRS_PORT.isHalfDuplex()) {
             //   ELRS_PORT.enableHalfDuplexRx();
             // }
+            // Serial.print("Sent: ");
+            // for (int i = 0; i < pendingPacket.length; i++) {
+            //   Serial.print(pendingPacket.data[i],HEX); Serial.print(" ");
+            // } Serial.println();
         }
     }
 }
@@ -252,80 +258,33 @@ void CRSF::crsfWritePacket(uint8_t packet[], uint8_t packetLength) {
     }
 }
 
-void CRSF::crsfReadPacket() {
-  static uint8_t rxBuffer[64];
-  static uint8_t rxIndex = 0;
-  static uint8_t expectedLength = 0;
-  
-  enum ParseState { FIND_ADDRESS, GET_LENGTH, GET_PAYLOAD };
-  static ParseState currentState = FIND_ADDRESS;
+void CRSF::crsfProcessPacket() {
+  if (telemetryQueue.hasItems()) {
+    crsfPacket telemetryPacket;
+    if (telemetryQueue.pop(telemetryPacket)) {
+      uint8_t packetType = telemetryPacket.data[2];
 
-  //  Read from ringBuffer instead of Serial (Serial reading is done via ISR)
-  while (ringBufferTail != ringBufferHead) {
-    // Fetch byte out from the background buffer array queue
-    uint8_t incomingByte = telemRingBuffer[ringBufferTail];
-    ringBufferTail = (ringBufferTail + 1) & (TELEM_RING_BUF_SIZE - 1);
-  // while (ELRS_PORT.available() > 0) {
-  //   uint8_t incomingByte = ELRS_PORT.read();
+      // Refresh watchdog timer upon any valid frame from the module
+      moduleConnected = true;
+      lastValidFrameTime = millis(); // Refresh our active timestamp clock
+      Serial.print("Received Packet type 0x"), Serial.println(packetType,HEX);
 
-    switch (currentState) {
-      case FIND_ADDRESS:
-        if (incomingByte == ADDR_RADIO || incomingByte == ADDR_BROADCAST || incomingByte == SYNC_BYTE) { // Addressed to the Radio (from ELRS Module)
-          rxBuffer[0] = incomingByte;
-          rxIndex = 1;
-          currentState = GET_LENGTH;
-        }
-        break;
-
-      case GET_LENGTH:
-        expectedLength = incomingByte;
-        if (expectedLength > 0 && expectedLength < 60) {
-          rxBuffer[1] = incomingByte;
-          rxIndex = 2;
-          currentState = GET_PAYLOAD;
-        } else {
-          currentState = FIND_ADDRESS;
-        }
-        break;
-
-      case GET_PAYLOAD:
-        rxBuffer[rxIndex++] = incomingByte;
-
-        // Verify full frame acquisition
-        if (rxIndex >= (expectedLength + 2)) {
-          
-          // Validate using CRC8
-          if (checkCrc(rxBuffer, rxIndex)) {
-            uint8_t packetType = rxBuffer[2];
-
-            // Refresh watchdog timer upon any valid frame from the module
-            moduleConnected = true;
-            lastValidFrameTime = millis(); // Refresh our active timestamp clock
-            Serial.print("Received Packet type 0x"), Serial.println(packetType,HEX);
-
-            switch (packetType) {
-              case ELRS_LINK_STATS:
-                crsfParseLinkStatsPacket(rxBuffer);
-                break;
-              case ELRS_DEVICE_INFO:
-                moduleInfoReceived = true;
-                crsfParseDeviceInfoPacket(rxBuffer, expectedLength);     
-                break;           
-              case ELRS_SETTINGS_RESPONSE:
-                crsfParseSettingsPacket(rxBuffer, expectedLength);
-                break;
-              case ELRS_STATUS:
-                moduleStatusReceived = true;
-                crsfParseElrsStatusPacket(rxBuffer, expectedLength);
-                break;
-              case ELRS_FRAMETYPE_RADIO_ID:
-                crsfParseElrsSyncPacket(rxBuffer);
-                break;
-            }
-          }
-          currentState = FIND_ADDRESS;
-        }
-        break;
+      switch (packetType) {
+        case ELRS_LINK_STATS:
+          crsfParseLinkStatsPacket(telemetryPacket.data);
+          break;
+        case ELRS_DEVICE_INFO:
+          moduleInfoReceived = true;
+          crsfParseDeviceInfoPacket(telemetryPacket.data, telemetryPacket.length);     
+          break;           
+        case ELRS_SETTINGS_RESPONSE:
+          crsfParseSettingsPacket(telemetryPacket.data, telemetryPacket.length);
+          break;
+        case ELRS_STATUS:
+          moduleStatusReceived = true;
+          crsfParseElrsStatusPacket(telemetryPacket.data, telemetryPacket.length);
+          break;
+      }
     }
   }
 }
@@ -560,75 +519,6 @@ void CRSF::crsfParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
       currentChunk++;
     }
   }
-
-    /*
-    uint8_t fieldIndex      = rxBuffer[5]; 
-    uint8_t chunksRemaining = rxBuffer[6]; 
-    uint8_t parentFolder    = rxBuffer[7]; 
-    uint8_t fieldType       = rxBuffer[8] & 0x7F;
-
-    //if (currentSettingsIndex == fieldIndex) {
-    //  currentSettingsIndex++;
-    //}
-    // Grab a safe location memory assignment block inside our global tracking profile
-    int slot = getParamSlot(fieldIndex);
-    if (slot != -1) {
-        // Hydrate baseline properties
-        txModule.params[slot].parentFolder = parentFolder;
-        txModule.params[slot].type = fieldType;
-        txModule.params[slot].choicesCount = 0; // Clear any old option counter maps
-
-        // Step A: Parse and save the Parameter Label string safely
-        uint8_t currentIdx = 9;
-        uint8_t labelCharCount = 0;
-        
-        while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length + 2) && labelCharCount < (CRSF_MAX_STRING_LEN - 1)) {
-            txModule.params[slot].label[labelCharCount++] = (char)rxBuffer[currentIdx++];
-        }
-        txModule.params[slot].label[labelCharCount] = '\0'; // Seal the label string safely
-
-        // Step B: If it's a SELECT drop-down type, parse its embedded option options list
-        if (fieldType == 0x09) {
-            currentIdx++; // Step over the first null-terminator divider cleanly
-            
-            uint8_t optionSlot = 0;
-            uint8_t charCount = 0;
-            
-            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length + 2)) {
-                char c = (char)rxBuffer[currentIdx++];
-                
-                if (c == ';') {
-                    // Seal current choice array string and step to the next slot layout
-                    txModule.params[slot].choices[optionSlot].text[charCount] = '\0';
-                    if (optionSlot < 5) optionSlot++;
-                    charCount = 0;
-                } else {
-                    if (charCount < (CRSF_MAX_STRING_LEN - 1)) {
-                        txModule.params[slot].choices[optionSlot].text[charCount++] = c;
-                    }
-                }
-            }
-            // Seal the absolute trailing choice string block option cleanly
-            txModule.params[slot].choices[optionSlot].text[charCount] = '\0';
-            txModule.params[slot].choicesCount = optionSlot + 1;
-
-            // Step C: Pull the trailing Current Value tracking byte parameter
-            uint8_t valueIdx = currentIdx + 1;
-            if (valueIdx < (length + 2)) {
-                txModule.params[slot].currentVal = rxBuffer[valueIdx];
-            }
-        }
-        
-        // Print a clean serial verification check confirming the data is now safe inside memory parameters
-        Serial.print("[STORAGE SAVED] -> ");
-        Serial.print(txModule.params[slot].label);
-        if (txModule.params[slot].type == 0x09) {
-            Serial.print(" | Active Option: ");
-            Serial.print(txModule.params[slot].choices[txModule.params[slot].currentVal].text);
-        }
-        Serial.println();
-    }
-    */
 }
 
 void CRSF::crsfParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
@@ -704,7 +594,8 @@ uint32_t CRSF::crsfNextInterval() {
 }
 
 void CRSF::crsfCheckTelemetry() {
-    crsfReadPacket(); 
+    //crsfReadPacket(); 
+    crsfProcessPacket();
     uint32_t now = millis();
     if (telemetryActive && (now - lastLinkStatsFrameTime > 1000)) {
       telemetryActive = false;
@@ -740,13 +631,13 @@ void CRSF::crsfInitModule() {
             // Transition condition: If the parser caught a 0x29 packet and saved a name
             if (strlen(txModule.name) > 0) {
                 moduleConnected = true;
-                connectionState = ELRS_SUBSCRIBING;
+                connectionState = ELRS_STATS;
                 lastHandshakeTime = now;
-                Serial.println("[HANDSHAKE] Module Detected! Moving to Subscription...");
+                Serial.println("[HANDSHAKE] Module Detected! Getting Status...");
             }
             break;
 
-        case ELRS_SUBSCRIBING:
+        case ELRS_STATS:
             // Line 575 from elrs.lua: Send LinkStat request via 0x2D
             if (now - lastHandshakeTime > 400) {
                 lastHandshakeTime = now;
@@ -756,7 +647,7 @@ void CRSF::crsfInitModule() {
             // Transition condition: If a valid Link Stats packet (0x2E) is received
             if (moduleStatusReceived) {
                 connectionState = ELRS_CONNECTED;
-                currentSettingsIndex = 1;  
+                currentSettingsIndex = 0;  
                 currentChunk = 0;      
                 parameterDiscoveryActive = true;
                 lastParameterQueryTime = now;
@@ -768,6 +659,11 @@ void CRSF::crsfInitModule() {
             break;
 
         case ELRS_CONNECTED:
+            if (now - lastLinkStatRequestTime > 1000) {
+                lastLinkStatRequestTime = now;
+                crsfRequestElrsStatus();
+                Serial.println("[HANDSHAKE] Sending LinkStat Request (0x2D, 0, 0)...");
+            }
             if (parameterDiscoveryActive) {
                 if (now - lastParameterQueryTime > 400) {
                     lastParameterQueryTime = now;
@@ -779,13 +675,7 @@ void CRSF::crsfInitModule() {
                         ready = true;
                         Serial.println("[DISCOVERY] >>> PARAMETER TREE MATRIX FULLY POPULATED AND CACHED <<<");
                     } else {
-                        // Request the next sequential register setting frame over the line
-                        //if (currentSettingsIndex < 3) {
-                        //  crsfSendCommand(currentSettingsIndex, 3);
-                        //}
-                        //else {
-                          crsfRequestSetting(currentSettingsIndex, currentChunk);
-                        //}
+                        crsfRequestSetting(currentSettingsIndex, currentChunk);
                     }
                 }
             }
@@ -799,8 +689,47 @@ void CRSF::crsfInitModule() {
 // ----------------------------------------------------------------------------
 // This function is built directly into the Arduino/STM32 core. It runs in the 
 // background at the end of loop() if bytes are waiting in the hardware registers.
-void serialEvent1() {
-  while (ELRS_PORT.available() > 0) {
-    crsfClass.addByteToRingBuffer(ELRS_PORT.read());
-  }
-}
+// void serialEvent1() {
+//   while (ELRS_PORT.available() > 0) {
+//     crsfClass.addByteToRingBuffer(ELRS_PORT.read());
+//   }
+// }void CRSF::crsfReadTelemetry() {
+    while (ELRS_PORT.available() > 0) {
+        if (ELRS_PORT.peek() != HANDSET_ADDRESS && ELRS_PORT.peek() != LUA_SCRIPT_ADDRESS) {
+            ELRS_PORT.read(); // Clear junk/out of sync bytes immediately
+            continue;
+        }
+
+        if (ELRS_PORT.available() < 2) return;    // We need at least 2 bytes available to extract the length
+        uint8_t addrByte = ELRS_PORT.read();      // Read header byte
+        uint8_t payloadLength = ELRS_PORT.read(); // Read length byte
+
+        if (payloadLength < 2 || payloadLength > (CRSF_MAX_PACKET_SIZE - 2)) {
+            continue; // Bad tracking frame size, continue flushing
+        }
+
+        // non-blocking hardware timeout until the rest of the block finishes arriving
+        uint32_t startWait = micros();
+        while (ELRS_PORT.available() < payloadLength) {
+            if (micros() - startWait > 1000) { // 1ms timeout cap limit
+                return; // Packet assembly timed out or fragmented, drop frame fragments
+            }
+        }
+
+        uint8_t localPacketBuffer[CRSF_MAX_PACKET_SIZE];
+        localPacketBuffer[0] = addrByte;
+        localPacketBuffer[1] = payloadLength;
+        for (uint8_t i = 0; i < payloadLength; i++) {
+            localPacketBuffer[2 + i] = ELRS_PORT.read();
+        }
+        uint8_t totalPacketBytesCount = payloadLength + 2;
+
+        if (checkCrc(localPacketBuffer, totalPacketBytesCount)) {
+          if (localPacketBuffer[2] == ELRS_RADIO_ID) {
+              crsfParseElrsSyncPacket(localPacketBuffer);  // Process sync packet immediately/dont add to queue
+          } else {
+              telemetryQueue.push(localPacketBuffer, totalPacketBytesCount);
+          }      
+        }
+    }
+}

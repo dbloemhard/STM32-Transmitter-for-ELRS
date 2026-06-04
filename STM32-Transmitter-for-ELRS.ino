@@ -806,57 +806,44 @@ void loop()
         // Debug data
         //logData();
         
-        // Check Telemetry first
-        crsfClass.crsfCheckTelemetry();
+        // Check Read Telemetry every loop
+        crsfClass.crsfReadTelemetry();
         // ----------------------------------
         // Send RC data to external module
         uint32_t currentMicros = micros();
         if (currentMicros > crsfTime) {
             if (loopCount <= 500) { // repeat 500 packets to build connection to TX module
-                // Build commond packet
-                // crsfClass.crsfPrepareDataPacket(crsfPacket, rcChannels);
-                // crsfClass.crsfWritePacket(crsfPacket, CRSF_PACKET_SIZE);
                 crsfClass.crsfSendChannels(rcChannels);
                 loopCount++;
             } else if (loopCount > 500 && loopCount <= 505) { // repeat 5 packets to avoid bad packet, change rate setting
-                // Build commond packet
                 if (currentSetting == 1 || currentSetting == 2) {
-                    // crsfClass.crsfPrepareCmdPacket(crsfCmdPacket, ELRS_PKT_RATE_COMMAND, currentPktRate);
-                    // crsfClass.crsfWritePacket(crsfCmdPacket, CRSF_CMD_PACKET_SIZE);
                     crsfClass.crsfSendCommand(ELRS_PKT_RATE_COMMAND, currentPktRate);
                 } else if (currentSetting == 3) {
-                    // crsfClass.crsfPrepareCmdPacket(crsfCmdPacket, ELRS_BIND_COMMAND, ELRS_START_COMMAND);
-                    // crsfClass.crsfWritePacket(crsfCmdPacket, CRSF_CMD_PACKET_SIZE);
                     crsfClass.crsfSendCommand(ELRS_BIND_COMMAND, ELRS_START_COMMAND);
                 } else if (currentSetting == 4) {
-                    // crsfClass.crsfPrepareCmdPacket(crsfCmdPacket, ELRS_WIFI_COMMAND, ELRS_START_COMMAND);
-                    // crsfClass.crsfWritePacket(crsfCmdPacket, CRSF_CMD_PACKET_SIZE);
                     crsfClass.crsfSendCommand(ELRS_WIFI_COMMAND, ELRS_START_COMMAND);
                 }
                 loopCount++;
             } else if (loopCount > 505 && loopCount <= 510) { // repeat 5 packets to avoid bad packet, change TX power level
                 if (currentSetting == 1 || currentSetting == 2) {
-                    // crsfClass.crsfPrepareCmdPacket(crsfCmdPacket, ELRS_POWER_COMMAND, currentPower);
-                    // crsfClass.crsfWritePacket(crsfCmdPacket, CRSF_CMD_PACKET_SIZE);
                     crsfClass.crsfSendCommand(ELRS_POWER_COMMAND, currentPower);
                 }
                 loopCount++;
             } else if (loopCount > 510 && loopCount <= 515) { // repeat 5 packets to avoid bad packet, change TX dynamic power setting
                 if (currentSetting == 1 || currentSetting == 2) {
-                    // crsfClass.crsfPrepareCmdPacket(crsfCmdPacket, ELRS_DYNAMIC_POWER_COMMAND, currentDynamic);
-                    // crsfClass.crsfWritePacket(crsfCmdPacket, CRSF_CMD_PACKET_SIZE);
                     crsfClass.crsfSendCommand(ELRS_DYNAMIC_POWER_COMMAND, currentDynamic);
                 }
                 loopCount++;
             } 
             else {
-                // crsfClass.crsfPrepareDataPacket(crsfPacket, rcChannels);
-                // crsfClass.crsfWritePacket(crsfPacket, CRSF_PACKET_SIZE);
                 crsfClass.crsfSendChannels(rcChannels);
             }
 
-            // Send commands to initiate module after 3 seconds, if not already done
-            if (!crsfClass.ready && millis() > 3000) {
+            // Process one telemetry command after sending channels
+            crsfClass.crsfCheckTelemetry();
+
+            // Send commands to initiate module after 5 seconds, if not already done
+            if (!crsfClass.ready && millis() > 5000) {
                 if (!crsfClass.commandQueue.hasItems()) {
                     crsfClass.crsfInitModule();
                 }
@@ -867,18 +854,6 @@ void loop()
 
             crsfTime = currentMicros + crsfClass.crsfNextInterval(); //CRSF_TIME_BETWEEN_FRAMES_US;
         }
-            
-        /*
-        // If the module is connected, and we dont yet have its name, send a request every 4 seconds
-        if (crsfClass.moduleConnected && crsfClass.moduleName == "" && (millis() - lastModuleRequestTime > 4000)) {
-            lastModuleRequestTime = millis();
-            crsfClass.crsfRequestModuleInfo();
-        } else if (crsfClass.moduleConnected && crsfClass.moduleName != "" && crsfClass.currentSettingsIndex < 10 && (millis() - lastModuleRequestTime > 1000)) {
-            lastModuleRequestTime = millis();
-            crsfClass.currentSettingsIndex++;
-            crsfClass.crsfRequestSetting(crsfClass.currentSettingsIndex);
-        }
-        */
     } // Not calibrating
 }
 

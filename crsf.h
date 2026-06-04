@@ -25,17 +25,12 @@
 // Basic setup
 #define CRSF_MAX_CHANNEL        16
 #define CRSF_FRAME_SIZE_MAX     64
-// Device address & type
-#define RADIO_ADDRESS           0xEA
-// #define ADDR_MODULE             0xEE  //  Crossfire transmitter
-#define TYPE_CHANNELS           0x16
+// Define channel input limits
+#define CRSF_DIGITAL_CHANNEL_MIN 172
+#define CRSF_DIGITAL_CHANNEL_MAX 1811
 
 // Fast, lock-free ring buffer
 #define TELEM_RING_BUF_SIZE 256 
-
-// Define AUX channel input limite
-#define CRSF_DIGITAL_CHANNEL_MIN 172
-#define CRSF_DIGITAL_CHANNEL_MAX 1811
 
 // internal crsf variables
 #define CRSF_TIME_NEEDED_PER_FRAME_US   1100 // 700 ms + 400 ms for potential ad-hoc request
@@ -57,10 +52,11 @@
 #define CRSF_MAX_PARAMS                 16
 #define CRSF_MAX_STRING_LEN             32
 #define CRSF_SUBTYPE_OPENTX_SYNC        0x10
-// PI Controller Gain for clock steering (0.05 is a safe, smooth starting point)
+// PI Controller Gain for clock steering
 #define CRSF_SYNC_KP                    0.05f 
 
-// ELRS telem packets
+// ELRS (CRSF) Frame types
+#define ELRS_CHANNELS                   0x16
 #define ELRS_LINK_STATS                 0x14
 #define ELRS_DEVICE_PING                0x28
 #define ELRS_DEVICE_INFO                0x29
@@ -68,10 +64,15 @@
 #define ELRS_SETTINGS_READ              0x2C
 #define ELRS_HEARTBEAT                  0x2D
 #define ELRS_STATUS                     0x2E
-#define ELRS_FRAMETYPE_RADIO_ID         0x3A
+#define ELRS_RADIO_ID                   0x3A
 
-// ELRS command
-#define ELRS_ADDRESS                    0xEE
+// Device addressess
+#define HANDSET_ADDRESS                 0xEA
+#define MODULE_ADDRESS                  0xEE
+#define LUA_SCRIPT_ADDRESS              0xEF
+#define BROADCAST_ADDRESS               0x00
+
+// ELRS commands
 #define ELRS_PKT_RATE_COMMAND           0x01
 #define ELRS_TLM_RATIO_COMMAND          0x02
 #define ELRS_SWITCH_MODE_COMMAND        0x03
@@ -83,9 +84,7 @@
 #define ELRS_BIND_COMMAND               0x11
 #define ELRS_START_COMMAND              0x04
 #define ELRS_SETTINGS_WRITE             0x2D
-#define ADDR_RADIO                      0xEA //  Radio Transmitter
 #define SYNC_BYTE                       0xC8
-#define ADDR_BROADCAST                  0x00
 
 // ELRS module Serial1
 extern HardwareSerial ELRS_PORT;
@@ -96,7 +95,7 @@ struct crsfPacket {
     uint8_t data[CRSF_MAX_PACKET_SIZE];
 };
 
-class crsfCommandQueue {
+class crsfPacketQueue {
 private:
     crsfPacket _buffer[CRSF_QUEUE_SIZE];
     volatile uint8_t _head; // Points to the next write slot
@@ -105,7 +104,7 @@ private:
     static const uint8_t _mask = CRSF_QUEUE_SIZE - 1;
 
 public:
-    crsfCommandQueue() : _head(0), _tail(0) {}
+    crsfPacketQueue() : _head(0), _tail(0) {}
 
     // Check if queue has data
     bool hasItems() {return _head != _tail;}
@@ -113,7 +112,6 @@ public:
     // Push a raw packet into the queue
     bool push(const uint8_t* rawData, uint8_t len) {
         if (len > CRSF_MAX_PACKET_SIZE) return false; // Safety check
-
         uint8_t nextHead = (_head + 1) & _mask;
         if (nextHead == _tail) {
             return false; // Queue Overflow (Full)
@@ -205,14 +203,16 @@ public:
    bool telemetryActive = false;
    bool ready = false;
    crsfModule txModule;
-   crsfCommandQueue commandQueue;
+   crsfPacketQueue commandQueue;    // Outgoing
+   crsfPacketQueue telemetryQueue;  // Incoming
 
    // Methods
    void begin(uint32_t rxPin, uint32_t txPin, bool halfDuplex);
    void crsfSendChannels(int16_t channels[]);
+   void crsfSendCommand(uint8_t command, uint8_t value);  // Enqueue command
    void crsfSendPendingCommand();  // Send one command from command queue
-   void crsfSendCommand(uint8_t command, uint8_t value);
-   void crsfCheckTelemetry();
+   void crsfReadTelemetry();  //Read and enqueue telem packets
+   void crsfCheckTelemetry(); //Process enqueued telem packet
    void crsfInitModule();
    uint32_t crsfNextInterval();
 
@@ -229,7 +229,7 @@ private:
    volatile uint32_t targetIntervalUs;
    volatile bool syncPacketReceived;
    
-   enum crsfConnectState {ELRS_PINGING, ELRS_SUBSCRIBING, ELRS_CONNECTED};
+   enum crsfConnectState {ELRS_PINGING, ELRS_STATS, ELRS_CONNECTED};
    crsfConnectState connectionState = ELRS_PINGING;
    uint32_t lastHandshakeTime = 0;   
    uint32_t lastParameterQueryTime = 0;
@@ -241,10 +241,12 @@ private:
 
    uint32_t lastValidFrameTime = 0;   
    uint32_t lastLinkStatsFrameTime = 0;   
+   uint32_t lastLinkStatRequestTime = 0;
 
    void crsfQueuePacket(uint8_t packet[], uint8_t packetLength);
    void crsfWritePacket(uint8_t packet[], uint8_t packetLength);
-   void crsfReadPacket();
+   void crsfProcessPacket();
+   //void crsfReadPacket();
    void crsfPingDevices();
    void crsfRequestElrsStatus();
    void crsfRequestSetting(uint8_t settingIndex, uint8_t chunk);
