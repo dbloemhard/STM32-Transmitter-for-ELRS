@@ -14,36 +14,6 @@
  * You should have received a copy of the GNU General Public License
  * along with Cleanflight.  If not, see <http://www.gnu.org/licenses/>.
  */
-/*
- =======================================================================================================
- * CRSF protocol
- *
- * CRSF protocol uses a single wire half duplex uart connection.
- * The master sends one frame every 4ms and the slave replies between two frames from the master.
- *
- * 420000 baud
- * not inverted
- * 8 Bit
- * 1 Stop bit
- * Big endian
- * ELRS uses crossfire protocol at many different baud rates supported by EdgeTX i.e. 115k, 400k, 921k, 1.87M, 3.75M
- * 115000 bit/s = 14400 byte/s
- * 420000 bit/s = 46667 byte/s (including stop bit) = 21.43us per byte
- * Max frame size is 64 bytes
- * A 64 byte frame plus 1 sync byte can be transmitted in 1393 microseconds.
- *
- * CRSF_TIME_NEEDED_PER_FRAME_US is set conservatively at 1500 microseconds
- *
- * Every frame has the structure:
- * <Device address><Frame length><Type><Payload><CRC>
- *
- * Device address: (uint8_t)
- * Frame length:   length in  bytes including Type (uint8_t)
- * Type:           (uint8_t)
- * CRC:            (uint8_t)
- *
- */
-
 #include "crsf.h"
 
 volatile uint8_t  CRSF::telemRingBuffer[TELEM_RING_BUF_SIZE] = {0};
