@@ -164,12 +164,12 @@ void CRSF::crsfRequestSetting(uint8_t settingIndex, uint8_t chunk) {
     uint8_t packetCmd[8];
 
     packetCmd[0] = MODULE_ADDRESS;        // 0xEE (Target Device: External TX Module)
-    packetCmd[1] = 6;                   // LENGTH: 7 Bytes remaining (Type + 5 Payload Bytes + 1 CRC)
-    packetCmd[2] = ELRS_SETTINGS_READ;  // 0x2C (CRSF_FRAMETYPE_PARAMETER_READ)
+    packetCmd[1] = 6;                     // LENGTH: 7 Bytes remaining (Type + 5 Payload Bytes + 1 CRC)
+    packetCmd[2] = ELRS_SETTINGS_READ;    // 0x2C (CRSF_FRAMETYPE_PARAMETER_READ)
     packetCmd[3] = MODULE_ADDRESS;        // Destination Address: 0xEE (The Module itself)
-    packetCmd[4] = LUA_SCRIPT_ADDRESS; // HANDSET_ADDRESS;          // Source/Origin Address: 0xEA (Your Transmitter Handset) or 0xEF ELRS_LUA
-    packetCmd[5] = settingIndex;        // Parameter Index position to read (1, 2, 3...)
-    packetCmd[6] = chunk;               // Value Chunk Offset parameter
+    packetCmd[4] = LUA_SCRIPT_ADDRESS;    // HANDSET_ADDRESS;          // Source/Origin Address: 0xEA (Your Transmitter Handset) or 0xEF ELRS_LUA
+    packetCmd[5] = settingIndex;          // Parameter Index position to read (1, 2, 3...)
+    packetCmd[6] = chunk;                 // Value Chunk Offset parameter
     packetCmd[7] = crsf_crc8(&packetCmd[2], packetCmd[1] - 1);  // crc
 
     //crsfWritePacket(packetCmd, 8);
@@ -179,14 +179,14 @@ void CRSF::crsfRequestSetting(uint8_t settingIndex, uint8_t chunk) {
     Serial.print(settingIndex);
     Serial.print(", chunk: ");
     Serial.print(chunk); Serial.println();
-    Serial.print("0x"); Serial.print(packetCmd[0],HEX);
-    Serial.print(" "); Serial.print(packetCmd[1],HEX);
-    Serial.print(" "); Serial.print(packetCmd[2],HEX);
-    Serial.print(" "); Serial.print(packetCmd[3],HEX);
-    Serial.print(" "); Serial.print(packetCmd[4],HEX);
-    Serial.print(" "); Serial.print(packetCmd[5],HEX);
-    Serial.print(" "); Serial.print(packetCmd[6],HEX);
-    Serial.print(" "); Serial.println(packetCmd[7],HEX);
+    // Serial.print("0x"); Serial.print(packetCmd[0],HEX);
+    // Serial.print(" "); Serial.print(packetCmd[1],HEX);
+    // Serial.print(" "); Serial.print(packetCmd[2],HEX);
+    // Serial.print(" "); Serial.print(packetCmd[3],HEX);
+    // Serial.print(" "); Serial.print(packetCmd[4],HEX);
+    // Serial.print(" "); Serial.print(packetCmd[5],HEX);
+    // Serial.print(" "); Serial.print(packetCmd[6],HEX);
+    // Serial.print(" "); Serial.println(packetCmd[7],HEX);
 }
 
 // Request Info Message by sending ELRS_SETTINGS_WRITE (0x2D) with param/value 0
@@ -223,7 +223,6 @@ void CRSF::crsfWritePacket(uint8_t packet[], uint8_t packetLength) {
     ELRS_PORT.write(packet, packetLength);
     if (ELRS_PORT.isHalfDuplex()) {
       // CRITICAL for Half-Duplex: If you don't flush, your incoming listening code will get corrupted by your own echo.
-      //ELRS_PORT.flush();
       ELRS_PORT.enableHalfDuplexRx();
     }
 }
@@ -300,20 +299,20 @@ void CRSF::crsfParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
   // Step C: Ensure we have enough remaining bytes left inside the frame payload to read metadata bounds
   if (currentIdx + 14 <= (length + 2)) {
     // Extract 32-bit values (Sent in Big-Endian format over the CRSF bus)
+    txModule.serialNumber[0] = rxBuffer[currentIdx++];
     txModule.serialNumber[1] = rxBuffer[currentIdx++];
     txModule.serialNumber[2] = rxBuffer[currentIdx++];
     txModule.serialNumber[3] = rxBuffer[currentIdx++];
-    txModule.serialNumber[4] = rxBuffer[currentIdx++];
 
+    txModule.hwVersion[0] = rxBuffer[currentIdx++];
     txModule.hwVersion[1] = rxBuffer[currentIdx++];
     txModule.hwVersion[2] = rxBuffer[currentIdx++];
     txModule.hwVersion[3] = rxBuffer[currentIdx++];
-    txModule.hwVersion[4] = rxBuffer[currentIdx++];
     
+    txModule.swVersion[0] = rxBuffer[currentIdx++];
     txModule.swVersion[1] = rxBuffer[currentIdx++];
     txModule.swVersion[2] = rxBuffer[currentIdx++];
     txModule.swVersion[3] = rxBuffer[currentIdx++];
-    txModule.swVersion[4] = rxBuffer[currentIdx++];
 
     // Extract the final configuration structural control tags
     totalSettingsCount = rxBuffer[currentIdx++]; 
@@ -322,16 +321,11 @@ void CRSF::crsfParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
     // reset the currently loaded count
     txModule.paramCount = 0;
     // Debug output
-    Serial.println("\n============ [ELRS DEVICE DETECTED] ============");
-    Serial.print("Raw Data            : ");
-    for (int i = 0; i < length; i++){
-      Serial.print(rxBuffer[i],HEX);Serial.print(" "); 
-    }
-    Serial.println();
+    Serial.println("============ [ELRS DEVICE DETECTED] ============");
     Serial.print("Module Name         : "); Serial.println(txModule.name);
-    Serial.print("Serial number       : "); Serial.print((char)txModule.serialNumber[1]); Serial.print((char)txModule.serialNumber[2]); Serial.print((char)txModule.serialNumber[3]); Serial.println((char)txModule.serialNumber[4]); 
-    Serial.print("Hardware Version    : "); Serial.print(txModule.hwVersion[1], HEX); Serial.print(txModule.hwVersion[2], HEX); Serial.print(txModule.hwVersion[3], HEX); Serial.println(txModule.hwVersion[4], HEX); 
-    Serial.print("Firmware Version    : "); Serial.print(txModule.swVersion[1], HEX); Serial.print(txModule.swVersion[2], HEX); Serial.print(txModule.swVersion[3], HEX); Serial.println(txModule.swVersion[4], HEX); 
+    Serial.print("Serial number       : "); Serial.print((char)txModule.serialNumber[0]); Serial.print((char)txModule.serialNumber[1]); Serial.print((char)txModule.serialNumber[2]); Serial.println((char)txModule.serialNumber[3]); 
+    Serial.print("Hardware Version    : "); Serial.print(txModule.hwVersion[0], HEX); Serial.print(txModule.hwVersion[1], HEX); Serial.print(txModule.hwVersion[2], HEX); Serial.println(txModule.hwVersion[3], HEX); 
+    Serial.print("Firmware Version    : "); Serial.print(txModule.swVersion[0], HEX); Serial.print(txModule.swVersion[1], HEX); Serial.print(txModule.swVersion[2], HEX); Serial.println(txModule.swVersion[3], HEX); 
     Serial.print("Available Settings  : "); Serial.print(totalSettingsCount); Serial.println(" Menu Items");
     Serial.print("Protocol Version    : "); Serial.println(txModule.protocolVersion);
     Serial.println("================================================\n");
@@ -343,7 +337,7 @@ void CRSF::clearModule() {
     for (int i = 0; i < txModule.paramCount; i++) {
         txModule.params[i].id = 0;
         txModule.params[i].parentFolder = 0;
-        txModule.params[i].type = 0;
+        txModule.params[i].type = static_cast<crsfValueType>(0);
         txModule.params[i].currentVal = 0;
         memset(txModule.params[i].label, 0, sizeof(txModule.params[i].label)); 
         for (int j = 0; j < txModule.params[i].choicesCount; j++) {
@@ -353,36 +347,30 @@ void CRSF::clearModule() {
     }
     txModule.paramCount = 0;
     txModule.paramsLoaded = false;
+    moduleInfoReceived = false;
+    moduleStatusReceived = false;
     // serialNumber, hwVersion, swVersion, protocolVersion will be reset when a module is next detected
 }
 
-uint8_t CRSF::parseChoicesString(int slot, uint8_t* buffer, uint8_t startIdx, uint8_t maxLen) {
-    uint8_t currentIdx = startIdx;
-    
-    // Determine which choice slot we are starting on
-    uint8_t activeOptionSlot = txModule.params[slot].choicesCount;
-    if (activeOptionSlot > 0) {
-        activeOptionSlot--; // Resume tracking if this is a continuation chunk
-    }
-    
-    uint8_t charCount = strlen(txModule.params[slot].choices[activeOptionSlot].text);
+void CRSF::parseChoicesString(int paramIndex) {
+    uint8_t currentIdx = 0;
+    uint8_t activeOptionSlot = 0;
+    uint8_t charCount = 0;
+    txModule.params[paramIndex].choicesCount = 0;
 
     // Keep parsing until we hit the end of the packet payload max length
-    while (currentIdx < maxLen) {
-        char c = (char)buffer[currentIdx++];
+    while (currentIdx < CRSF_MAX_PARAM_DATA_LEN) {
+        char c = txModule.params[paramIndex].valueString[currentIdx++];
         
         if (c == 0x00) {
-            // CRITICAL: We hit the end of the choices block! 
-            // Seal the final string choice segment properly.
-            txModule.params[slot].choices[activeOptionSlot].text[charCount] = '\0';
-            txModule.params[slot].choicesCount = activeOptionSlot + 1;
-            
-            // Return our exact position pointer so the caller knows where currentVal lives!
-            return currentIdx - 1; 
+            // Seal the final string choice segment and return.
+            txModule.params[paramIndex].choices[activeOptionSlot].text[charCount] = '\0';
+            txModule.params[paramIndex].choicesCount = activeOptionSlot + 1;
+            return; 
         }
         else if (c == ';') {
             // Semicolon delimiter encountered: seal the current choice string segment
-            txModule.params[slot].choices[activeOptionSlot].text[charCount] = '\0';
+            txModule.params[paramIndex].choices[activeOptionSlot].text[charCount] = '\0';
             
             // Advance to the next safe storage choice slot parameter bounds
             if (activeOptionSlot < (CRSF_MAX_PARAMS - 1)) {
@@ -392,17 +380,12 @@ uint8_t CRSF::parseChoicesString(int slot, uint8_t* buffer, uint8_t startIdx, ui
         } 
         else {
             if (charCount < (CRSF_MAX_STRING_LEN - 1)) {
-                txModule.params[slot].choices[activeOptionSlot].text[charCount++] = c;
+                txModule.params[paramIndex].choices[activeOptionSlot].text[charCount++] = c;
             }
         }
     }
-    
-    // Chunk boundary fallback (For incomplete data packets where chunksRemaining > 0)
-    txModule.params[slot].choices[activeOptionSlot].text[charCount] = '\0';
-    txModule.params[slot].choicesCount = activeOptionSlot + 1;
-    return currentIdx;
+   
 }
-
 
 int CRSF::getParamSlot(uint8_t id) {
     // 1. Search if this parameter ID is already initialized
@@ -413,6 +396,21 @@ int CRSF::getParamSlot(uint8_t id) {
     if (txModule.paramCount < CRSF_MAX_PARAMS) {
         int freshSlot = txModule.paramCount;
         txModule.params[freshSlot].id = id;
+        // Initialize all parameter data
+        txModule.params[freshSlot].parentFolder = 0;
+        txModule.params[freshSlot].type = static_cast<crsfValueType>(0);
+        txModule.params[freshSlot].currentVal = 0;
+        txModule.params[freshSlot].minVal = 0;
+        txModule.params[freshSlot].maxVal = 0;
+        txModule.params[freshSlot].precision = 0;
+        txModule.params[freshSlot].step = 0;
+        txModule.params[freshSlot].timeout = 0;
+        memset(txModule.params[freshSlot].label, 0, sizeof(txModule.params[freshSlot].label));
+        memset(txModule.params[freshSlot].valueString, 0, sizeof(txModule.params[freshSlot].valueString));
+        txModule.params[freshSlot].valueStringCharCount = 0;
+        memset(txModule.params[freshSlot].units, 0, sizeof(txModule.params[freshSlot].units));
+        memset(txModule.params[freshSlot].choices, 0, sizeof(txModule.params[freshSlot].choices));
+        txModule.params[freshSlot].choicesCount = 0;
         txModule.paramCount++;
         return freshSlot;
     }
@@ -420,78 +418,183 @@ int CRSF::getParamSlot(uint8_t id) {
 }
 
 void CRSF::crsfParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
-  uint8_t fieldIndex = rxBuffer[5];
-  int slot = getParamSlot(fieldIndex);
-  
-  if (slot != -1) {
-    chunksRemaining = rxBuffer[6];
-    txModule.params[slot].parentFolder = rxBuffer[7];
-    txModule.params[slot].type = rxBuffer[8] & 0x7F; 
+  uint8_t currentIdx = 5;
+  uint8_t fieldIndex = rxBuffer[currentIdx++]; //5
 
-    uint8_t endOfChoicesIdx = 0;
+  int slot = getParamSlot(fieldIndex);
+  if (slot != -1) {
+    chunksRemaining = rxBuffer[currentIdx++]; //6
 
     if (currentChunk == 0) {
+      // Parent folder and type only included on initial chunk packet
+      txModule.params[slot].parentFolder = rxBuffer[currentIdx++]; //7
+      txModule.params[slot].type = static_cast<crsfValueType>(rxBuffer[currentIdx++] & 0x7F);  //8
+
       // Parse out the Parameter Label String starting at Index 9
-      uint8_t currentIdx = 9;
       uint8_t labelCharCount = 0;
+      currentIdx = 9;  // (moot, since it will be set to that from the last currentIdx++ command - but just to be sure)
       while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length + 2) && labelCharCount < (CRSF_MAX_STRING_LEN - 1)) {
         txModule.params[slot].label[labelCharCount++] = (char)rxBuffer[currentIdx++];
       }
       txModule.params[slot].label[labelCharCount] = '\0'; 
-      
-      // Move past the label's null terminator byte cleanly
       currentIdx++; 
-      
-      // Clear tracking states for this brand new parameter tree entry
-      txModule.params[slot].choicesCount = 0;
-      memset(txModule.params[slot].choices, 0, sizeof(txModule.params[slot].choices));
-
-      // Append choices payload contents and capture the exact final null index pointer!
-      endOfChoicesIdx = parseChoicesString(slot, rxBuffer, currentIdx, length + 2);
     } 
-    else {
-      // Continuation chunks enter straight into choices strings at Index 9
-      uint8_t currentIdx = 9;
-      endOfChoicesIdx = parseChoicesString(slot, rxBuffer, currentIdx, length + 2);
-    }
 
-    // --- FINAL CHUNK RECEPTION CLOSURE ---
-    if (chunksRemaining == 0) {
-      // FIXED METADATA EXTRACTION: 
-      // The true selected option index tracker sits EXACTLY 1 byte after the choices null terminator!
-      uint8_t valuePositionIndex = endOfChoicesIdx + 1;
-      
-      if (valuePositionIndex < (length + 2)) {
-        txModule.params[slot].currentVal = rxBuffer[valuePositionIndex];
-      }
-
-      // Print debug verification dashboard update
-      Serial.print("[STORAGE SAVED] ");
-      Serial.print(txModule.params[slot].label);
-      Serial.print(" | Choices("); Serial.print(txModule.params[slot].choicesCount); Serial.print("): ");
-      
-      if (txModule.params[slot].choicesCount > 0) {
-        for (int i = 0; i < txModule.params[slot].choicesCount; i++) {
-            Serial.print(txModule.params[slot].choices[i].text); 
-            if (i < txModule.params[slot].choicesCount - 1) {
-                Serial.print(", ");
+    switch(txModule.params[slot].type) {
+        case CRSF_TEXT_SELECTION:
+            // Dropdown/options selection - the main type used in ELRS
+            // New parameters (currentChunk==0) start the choices after the label string.
+            // Continuation chunks enter straight into choices strings at Index 7
+            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length+1) && txModule.params[slot].valueStringCharCount < (CRSF_MAX_PARAM_DATA_LEN - 1)) {
+              txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount++] = (char)rxBuffer[currentIdx++];
             }
-        } 
-      }
-      Serial.print(" | Active Selection: "); Serial.println(txModule.params[slot].choices[txModule.params[slot].currentVal].text);
+            txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount] = '\0';
+            txModule.params[slot].valueStringCharCount--; // Decrement the valueString char counter because the loop above insists on picking up the crc byte in chunked params
 
-      // Move on to process the next sequential hardware parameter tree setting
-      currentChunk = 0;
-      currentSettingsIndex++;
+
+            // --- FINAL CHUNK RECEPTION CLOSURE ---
+            if (chunksRemaining == 0) {
+              // The selected option is after the choices string null terminator
+              currentIdx++;
+              if (currentIdx < (length + 2)) {
+                txModule.params[slot].currentVal = rxBuffer[currentIdx];
+              }
+              // Next byte is min selection
+              currentIdx++;
+              if (currentIdx < (length + 2)) {
+                txModule.params[slot].minVal = rxBuffer[currentIdx];
+              }     
+              // Next byte is max selection (also number of choices)
+              currentIdx++;
+              if (currentIdx < (length + 2)) {
+                txModule.params[slot].maxVal = rxBuffer[currentIdx];
+              }    
+              // Next byte is 0 in all cases i checked (maybe reserved for step?)
+              currentIdx++;
+              // Parse out the units String
+              currentIdx++;
+              uint8_t unitCharCount = 0;
+              while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length + 2) && unitCharCount < (CRSF_MAX_STRING_LEN - 1)) {
+                txModule.params[slot].units[unitCharCount++] = (char)rxBuffer[currentIdx++];
+              }
+              txModule.params[slot].units[unitCharCount] = '\0';      
+
+              parseChoicesString(slot);
+
+              Serial.print("[PARAMETER SAVED] ");
+              Serial.print(txModule.params[slot].label);
+              Serial.print(" | Choices("); Serial.print(txModule.params[slot].minVal); Serial.print("-"); Serial.print(txModule.params[slot].maxVal); Serial.print("): ");
+              
+              if (txModule.params[slot].choicesCount > 0) {
+                for (int i = 0; i < txModule.params[slot].choicesCount; i++) {
+                    Serial.print(txModule.params[slot].choices[i].text); 
+                    if (i < txModule.params[slot].choicesCount - 1) {
+                        Serial.print(", ");
+                    }
+                } 
+              }
+              Serial.print(" | Active Selection: "); Serial.print(txModule.params[slot].choices[txModule.params[slot].currentVal].text);
+              Serial.println(txModule.params[slot].units);
+              // Move on to process the next sequential hardware parameter tree setting
+              currentChunk = 0;
+              currentSettingsIndex++;
+            }
+            else {
+              // Data payload remains chunked, increment block indicators to fetch remaining parts
+              currentChunk++;
+              Serial.print("Chunk stored");
+              //Serial.print("Chunk stored. Current string: "); Serial.println(txModule.params[slot].valueString);
+            }
+            break;
+        case CRSF_FOLDER:
+            // Menu folder containing sub-items
+            // Theoretically this could be chunked too, but not done in ELRS (Yet)
+            // if (chunksRemaining == 0) {
+            Serial.print("[PARAMETER SAVED] ");
+            Serial.print(txModule.params[slot].label);
+            Serial.print(" | Menu (ID: "); Serial.print(txModule.params[slot].id); Serial.println(")");
+            // Move on to process the next sequential hardware parameter tree setting
+            currentChunk = 0;
+            currentSettingsIndex++;
+            break;
+        case CRSF_INFO:
+            // Display non-editable static string
+            // Not sure yet - havent reached one of these...
+            // Move on to process the next sequential hardware parameter tree setting
+            Serial.print("Info packet. Packet data: ");
+            for (int i = 0; i < length; i++){
+              Serial.print(rxBuffer[i],HEX);Serial.print(" "); 
+            } Serial.println();
+            currentChunk = 0;
+            currentSettingsIndex++;
+            break;
+        case CRSF_COMMAND:
+            // Execute command / status such as initiate bind or BLE joystick
+            // Sample Packet: EA 17 2B EA EE F 0 E D 45 6E 61 62 6C 65 20 57 69 46 69 0 0 C8 0 5D 
+            // Sync byte, Len, type (0x2b settings info), dest (0xEA handset), source (0xEE module), id (0x0f=15), chunks remaining (0), parent (0x0e=14), type (0x0d=command)
+            // label (Enable WiFi), string terminator 0x0, step/state (0), timeout (0xc8=200=2s), null terminated status string
+            // Label has been saved and currentIdx is sitting at step/state
+            txModule.params[slot].step = rxBuffer[currentIdx++];         
+            txModule.params[slot].timeout = rxBuffer[currentIdx++] * 10;
+            // info/status stored in the valueString property
+            while (rxBuffer[currentIdx] != 0x00 && currentIdx < (length+1) && txModule.params[slot].valueStringCharCount < (CRSF_MAX_PARAM_DATA_LEN - 1)) {
+              txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount++] = (char)rxBuffer[currentIdx++];
+            }
+            txModule.params[slot].valueString[txModule.params[slot].valueStringCharCount] = '\0';
+            txModule.params[slot].valueStringCharCount--; // Decrement the valueString char counter because the loop above insists on picking up the crc byte in chunked params
+            Serial.print("[PARAMETER SAVED] ");
+            Serial.print(txModule.params[slot].label);
+            Serial.print(" | Command (Current state "); 
+            switch(txModule.params[slot].step) {
+              case 0: // IDLE
+                Serial.print("IDLE"); 
+                break;
+              case 1: // CLICK - user has clicked the command to execute
+                Serial.print("CLICK"); 
+                break;
+              case 2: // EXECUTING - command is executing
+                Serial.print("EXECUTING"); 
+                break;
+              case 3: // ASKCONFIRM - command pending user OK
+                Serial.print("ASKCONFIRM"); 
+                break;
+              case 4: // CONFIRMED - user has clicked confirm
+                Serial.print("CONFIRMED"); 
+                break;
+              case 5: // CANCEL - user has requested cancel
+                Serial.print("CANCEL"); 
+                break;
+              case 6: // QUERY - host is requested updated status
+                Serial.print("QUERY"); 
+                break;
+            }
+            Serial.print(" | Timeout ");
+            Serial.print(txModule.params[slot].timeout); 
+            Serial.print(" | Info/Status : "); Serial.print(txModule.params[slot].valueString); Serial.println(")");
+            currentChunk = 0;
+            currentSettingsIndex++;
+            break;
+        default:
+            // String, Float or Int types defined in spec but not used in ELRS
+            // Move on to process the next sequential hardware parameter tree setting
+            Serial.print("Unhanded info packet type. Packet data: ");
+            for (int i = 0; i < length; i++){
+              Serial.print(rxBuffer[i],HEX);Serial.print(" "); 
+            } Serial.println();
+            currentChunk = 0;
+            currentSettingsIndex++;
+        break;
     }
-    else {
-      // Data payload remains chunked, increment block indicators to fetch remaining parts
-      currentChunk++;
-    }
+    lastParameterQueryTime = 0;  //Move on to the next parameter immediately
   }
 }
 
 void CRSF::crsfParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
+    // rxBuffer[3] = destination (handset, 0xEF/0xEA), rxBuffer[4] = source (TX module, 0xEE).
+    // Discard frames not originating from the ELRS TX module address.
+    if (rxBuffer[4] != MODULE_ADDRESS) {
+        return;
+    }
     elrsStatus.packetsBad  = rxBuffer[5];
     elrsStatus.packetsGood = ((uint16_t)rxBuffer[6] << 8) | rxBuffer[7]; 
     uint8_t rawFlags = rxBuffer[8]; 
@@ -507,7 +610,7 @@ void CRSF::crsfParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
     elrsStatus.statusMessage[charCounter] = '\0';
 
     // Debug output
-    Serial.println("\n============ [ELRS LINK STATUS 0x2E] ============");
+    Serial.println("============ [ELRS LINK STATUS 0x2E] ============");
     // Serial.print("Raw Data            : ");
     // for (int i = 0; i < length; i++){
     //   Serial.print(rxBuffer[i],HEX);Serial.print(" "); 
@@ -530,21 +633,35 @@ void CRSF::crsfParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
 
 void CRSF::crsfParseElrsSyncPacket(uint8_t rxBuffer[]) {
     // Ensure the packet matches the OpenTX Sync Subtype
-    if (rxBuffer[1] >= 9 && rxBuffer[3] == CRSF_SUBTYPE_OPENTX_SYNC) {      
+    // rxBuffer[0] = Sync byte
+    // rxBuffer[1] = length
+    // rxBuffer[2] = Packet Type 0x3A
+    // rxBuffer[3] = Source 0xEE
+    // rxBuffer[4] = Destination 0xEF
+    
+    if (rxBuffer[1] >= 11 && rxBuffer[5] == CRSF_SUBTYPE_OPENTX_SYNC) {      
         // Extract 32-bit Big-Endian Rate Interval (bytes 1-4 of payload)
-        uint32_t rawInterval = ((uint32_t)rxBuffer[4] << 24) | 
-                               ((uint32_t)rxBuffer[5] << 16) | 
-                               ((uint32_t)rxBuffer[6] << 8)  | 
-                                rxBuffer[7];
+        uint32_t rawInterval = ((uint32_t)rxBuffer[6] << 24) | 
+                               ((uint32_t)rxBuffer[7] << 16) | 
+                               ((uint32_t)rxBuffer[8] << 8)  | 
+                                rxBuffer[9];
         // Extract 32-bit Signed Big-Endian Phase Shift (bytes 5-8 of payload)
-        int32_t rawShift = ((int32_t)rxBuffer[8] << 24) | 
-                           ((int32_t)rxBuffer[9] << 16) | 
-                           ((int32_t)rxBuffer[10] << 8)  | 
-                            rxBuffer[11];
+        int32_t rawShift = ((int32_t)rxBuffer[10] << 24) | 
+                           ((int32_t)rxBuffer[11] << 16) | 
+                           ((int32_t)rxBuffer[12] << 8)  | 
+                            rxBuffer[13];
         // ExpressLRS scales microsecond telemetry values by 10
         targetIntervalUs   = (uint32_t)((float)rawInterval * 0.1f);
         currentPhaseShift  = (int32_t)((float)rawShift * 0.1f);
         syncPacketReceived = true;
+        // if (millis()>lastSyncPacketDisplay+1000) {
+        //   Serial.print("Received Sync Packet. Interval: ");Serial.print(targetIntervalUs);Serial.print(" Phase Shift: ");Serial.println(currentPhaseShift);
+        //   Serial.print("Raw Data            : ");
+        //   for (int i = 0; i < 14; i++){
+        //     Serial.print(rxBuffer[i],HEX);Serial.print(" "); 
+        //   } Serial.println();
+        //   lastSyncPacketDisplay = millis();
+        // }
     }
 }
 
@@ -555,10 +672,9 @@ uint32_t CRSF::crsfNextInterval() {
         // Apply Proportional feedback correction if a sync frame came in
         int32_t correction = 0;
         if (syncPacketReceived) {
-            correction = (int32_t)((float)currentPhaseShift * CRSF_SYNC_KP);
+            correction = currentPhaseShift;
             syncPacketReceived = false; // Reset the flag
         }
-        
         // Return the dynamic duration for the *next* single loop cycle
         return baseInterval + correction;
 }
@@ -629,13 +745,13 @@ void CRSF::crsfInitModule() {
             break;
 
         case ELRS_CONNECTED:
-            if (now - lastLinkStatRequestTime > 1000) {
+            if (now - lastLinkStatRequestTime > 2000) {
                 lastLinkStatRequestTime = now;
                 crsfRequestElrsStatus();
                 Serial.println("[HANDSHAKE] Sending LinkStat Request (0x2D, 0, 0)...");
             }
             if (parameterDiscoveryActive) {
-                if (now - lastParameterQueryTime > 400) {
+                if (now - lastParameterQueryTime > 500) {
                     lastParameterQueryTime = now;
                     // currentSettingsIndex++;  // only increment after successfully receiving last parameter.
                     // Stop scanning once we hit the max listed in the device info
@@ -645,6 +761,7 @@ void CRSF::crsfInitModule() {
                         ready = true;
                         Serial.println("[DISCOVERY] >>> PARAMETER TREE MATRIX FULLY POPULATED AND CACHED <<<");
                     } else {
+
                         crsfRequestSetting(currentSettingsIndex, currentChunk);
                     }
                 }

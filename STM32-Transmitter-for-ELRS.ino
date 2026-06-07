@@ -806,8 +806,9 @@ void loop()
         // Debug data
         //logData();
         
-        // Check Read Telemetry every loop
+        // Read Telemetry data every loop (telemetry processed in crsfCheckTelemetry)
         crsfClass.crsfReadTelemetry();
+
         // ----------------------------------
         // Send RC data to external module
         uint32_t currentMicros = micros();
@@ -834,8 +835,7 @@ void loop()
                     crsfClass.crsfSendCommand(ELRS_DYNAMIC_POWER_COMMAND, currentDynamic);
                 }
                 loopCount++;
-            } 
-            else {
+            } else {
                 crsfClass.crsfSendChannels(rcChannels);
             }
 
@@ -844,11 +844,9 @@ void loop()
 
             // Send commands to initiate module after 5 seconds, if not already done
             if (!crsfClass.ready && millis() > 5000) {
-                if (!crsfClass.commandQueue.hasItems()) {
-                    crsfClass.crsfInitModule();
-                }
-            }   
-            
+                crsfClass.crsfInitModule();
+            }            
+               
             // Command packet interleaving
             crsfClass.crsfSendPendingCommand();
 

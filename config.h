@@ -142,3 +142,49 @@ enum chan_order
 // #define USE_HT_THROTTLE
 
 
+// External Module responses;
+// [CRSF] -> Querying Menu Parameter Index: 1, chunk: 4
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Packet Rate | Choices(0-9): 50Hz(-115dBm), 100Hz Full(-112dBm), 150Hz(-112dBm), 250Hz(-108dBm), 333Hz Full(-105dBm), 500Hz(-105dBm), D250(-104dBm), D500(-104dBm), F500(-104dBm), F1000(-104dBm) | Active Selection: 333Hz Full(-105dBm)
+// [CRSF] -> Querying Menu Parameter Index: 2, chunk: 1
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Telem Ratio | Choices(0-9): Std, Off, 1:128, 1:64, 1:32, 1:16, 1:8, 1:4, 1:2, Race | Active Selection: 1:8 (3219bps)
+// Chunk stored[CRSF] -> Querying Menu Parameter Index: 3, chunk: 1
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Switch Mode | Choices(0-2): 8ch, 16ch Rate/2, 12ch Mixed | Active Selection: 8ch
+// [CRSF] -> Querying Menu Parameter Index: 4, chunk: 0
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Model Match | Choices(0-1): Off, On | Active Selection: Off (ID: 0)
+// [CRSF] -> Querying Menu Parameter Index: 5, chunk: 0
+// Received Packet type 0x2B
+// [PARAMETER SAVED] TX Power (100mW Dyn) | Menu (ID: 5)
+// [CRSF] -> Querying Menu Parameter Index: 6, chunk: 0
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Max Power | Choices(0-5): 10, 25, 50, 100, 250, 500 | Active Selection: 100mW
+// Chunk stored[CRSF] -> Querying Menu Parameter Index: 7, chunk: 1
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Dynamic | Choices(0-5): Off, Dyn, AUX9, AUX10, AUX11, AUX12 | Active Selection: Dyn
+// [CRSF] -> Querying Menu Parameter Index: 8, chunk: 0
+// Received Packet type 0x2B
+// [PARAMETER SAVED] VTX Administrator | Menu (ID: 8)
+// [CRSF] -> Querying Menu Parameter Index: 9, chunk: 0
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Band | Choices(0-6): Off, A, B, E, F, R, L | Active Selection: Off
+// [CRSF] -> Querying Menu Parameter Index: 10, chunk: 0
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Channel | Choices(0-7): 1, 2, 3, 4, 5, 6, 7, 8 | Active Selection: 1
+// [CRSF] -> Querying Menu Parameter Index: 11, chunk: 0
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Pwr Lvl | Choices(0-8): -, 1, 2, 3, 4, 5, 6, 7, 8 | Active Selection: -
+// Chunk stored[CRSF] -> Querying Menu Parameter Index: 12, chunk: 3
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Pitmode | Choices(0-21): Off, On, AUX1�, AUX1�, AUX2�, AUX2�, AUX3�, AUX3�, AUX4�, AUX4�, AUX5�, AUX5�, AUX6�, AUX6�, AUX7�, AUX10� | Active Selection: Off
+// [CRSF] -> Querying Menu Parameter Index: 13, chunk: 0
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Send VTx | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+// [CRSF] -> Querying Menu Parameter Index: 14, chunk: 0
+// Received Packet type 0x2B
+// [PARAMETER SAVED] WiFi Connectivity | Menu (ID: 14)
+// [CRSF] -> Querying Menu Parameter Index: 15, chunk: 0
+// Received Packet type 0x2B
+// [PARAMETER SAVED] Enable WiFi | Command (Current state IDLE | Timeout 2000 | Info/Status : )
