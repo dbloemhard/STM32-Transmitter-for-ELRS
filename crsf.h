@@ -49,6 +49,7 @@
  * CRC:            (uint8_t)
  *
  */
+//#define CRSFDEBUG
 
 #define ELRS_PORT Serial1
 
@@ -59,15 +60,12 @@
 #define CRSF_DIGITAL_CHANNEL_MIN 172
 #define CRSF_DIGITAL_CHANNEL_MAX 1811
 
-// Fast, lock-free ring buffer
-#define TELEM_RING_BUF_SIZE 256 
-
 // internal crsf variables
 #define CRSF_TIME_NEEDED_PER_FRAME_US   1100 // 700 ms + 400 ms for potential ad-hoc request
 //#define SERIAL_BAUDRATE                 115200 //low baud for Arduino Nano , the TX module will auto detect baud. 115200/400000
 //#define CRSF_TIME_BETWEEN_FRAMES_US     4000 // 4 ms 250Hz
-#define SERIAL_BAUDRATE                 400000
-#define CRSF_TIME_BETWEEN_FRAMES_US     2000 // From KKbin505's code 1666 // 1.6 ms 500Hz
+#define SERIAL_BAUDRATE                 921600 //400000
+#define CRSF_TIME_BETWEEN_FRAMES_US     2000   // 500Hz
 #define CRSF_PAYLOAD_OFFSET             offsetof(crsfFrameDef_t, type)
 #define CRSF_MAX_PACKET_SIZE            64
 #define CRSF_QUEUE_SIZE                 8  // Must be a power of 2 (2, 4, 8, 16) for fast masking
@@ -79,12 +77,10 @@
 #define CRSF_FRAME_LENGTH               24 // length of type + payload + crc
 #define CRSF_CMD_PACKET_SIZE            8
 #define CRSF_TLM_PACKET_SIZE            10
-#define CRSF_MAX_PARAMS                 16
+#define CRSF_MAX_PARAMS                 32
 #define CRSF_MAX_STRING_LEN             32
 #define CRSF_MAX_PARAM_DATA_LEN         256
 #define CRSF_SUBTYPE_OPENTX_SYNC        0x10
-// PI Controller Gain for clock steering
-#define CRSF_SYNC_KP                    0.05f 
 
 // ELRS (CRSF) Frame types
 #define ELRS_CHANNELS                   0x16
@@ -178,89 +174,14 @@ struct crsfLinkStats {
   int8_t  downlinkSNR;     // Telemetry SNR (dB)
 };
 
-// Individual Option/Choice Structure (For SELECT type parameters)
-struct crsfOption {
-    char text[CRSF_MAX_STRING_LEN];
-};
-
-typedef enum
-{
-    CRSF_UINT8 = 0,
-    CRSF_INT8 = 1,
-    CRSF_UINT16 = 2,
-    CRSF_INT16 = 3,
-    CRSF_UINT32 = 4,
-    CRSF_INT32 = 5,
-    CRSF_UINT64 = 6,
-    CRSF_INT64 = 7,
-    CRSF_FLOAT = 8,
-    CRSF_TEXT_SELECTION = 9,
-    CRSF_STRING = 10,
-    CRSF_FOLDER = 11,
-    CRSF_INFO = 12,
-    CRSF_COMMAND = 13,
-    CRSF_VTX = 15,
-    CRSF_OUT_OF_RANGE = 127,
-} crsfValueType;
-
-// Individual Parameter Node Structure
-struct crsfParameter {
-    uint8_t id;                       // Field Index (3, 4, 5, etc.)
-    uint8_t parentFolder;             // Parent Folder ID (0 for root)
-    crsfValueType type;                     // 0x09 = Select, 0x0B = Folder, etc.
-    int32_t currentVal;               // Currently active option index 
-    int32_t minVal;                   // Used for numeric parameters
-    int32_t maxVal;                   // Numeric parameters and String type max length
-    int32_t precision;                // Only for 0x08 float type
-    uint8_t step;                     // Adjustment step / Command state step
-    uint32_t timeout;                  // Command timeout
-   
-    char label[CRSF_MAX_STRING_LEN];  
-    char valueString[CRSF_MAX_PARAM_DATA_LEN];
-    uint8_t valueStringCharCount;
-    char units[CRSF_MAX_STRING_LEN];
-    crsfOption choices[CRSF_MAX_PARAMS]; // Extracted selectable strings (e.g., {"Off", "On"}) 
-    uint8_t choicesCount;                // Number of options successfully parsed
-};
-
-// ELRS Status structure
-struct crsfElrsStatus {
-    uint8_t  packetsBad;
-    uint16_t packetsGood;
-    bool     isConnected;
-    bool     modelMismatch;
-    bool     isArmed;
-    char     statusMessage[CRSF_MAX_STRING_LEN];
-};
-
-struct crsfModule {
-   char name[CRSF_MAX_STRING_LEN];
-   uint8_t serialNumber[4];
-   uint8_t hwVersion[4];
-   uint8_t swVersion[4];
-   uint8_t paramCount;
-   uint8_t protocolVersion;
-   bool paramsLoaded;
-
-   crsfParameter params[CRSF_MAX_PARAMS];
-};
-
-// Global variables
-//extern crsfLinkStats elrsLink;
-//extern bool moduleConnected;
-//extern uint32_t lastModuleHeartbeatTime;
 
 class CRSF {
 public:
    // Properties
    crsfLinkStats linkStats;
-   crsfElrsStatus elrsStatus;
    bool moduleConnected = false;
-   bool moduleInfoReceived = false;
-   bool moduleStatusReceived = false;
    bool telemetryActive = false;
-   bool ready = false;
-   crsfModule txModule;
+   uint32_t lastValidFrameTime = 0;   
    crsfPacketQueue commandQueue;    // Outgoing
    crsfPacketQueue telemetryQueue;  // Incoming
 
@@ -268,57 +189,29 @@ public:
    void begin(uint32_t rxPin, uint32_t txPin, bool halfDuplex);
    void crsfSendChannels(int16_t channels[]);
    void crsfSendCommand(uint8_t command, uint8_t value);  // Enqueue command
-   void crsfSendPendingCommand();  // Send one command from command queue
+   void crsfQueuePacket(uint8_t packet[], uint8_t packetLength);
+   void crsfSendQueuedCommand();  // Send one command from command queue
    void crsfReadTelemetry();  //Read and enqueue telem packets
-   void crsfCheckTelemetry(); //Process enqueued telem packet
-   void crsfInitModule();
    uint32_t crsfNextInterval();
 
-   // Static ring buffer handler that the global ISR can access
-   static void addByteToRingBuffer(uint8_t incomingByte);
 private:
-   // Lock-free ring buffer variables shared with the ISR
-   static volatile uint8_t  telemRingBuffer[TELEM_RING_BUF_SIZE];
-   static volatile uint16_t ringBufferHead;
-   static volatile uint16_t ringBufferTail;
-
    // Variables to track sync offsets
-   volatile int32_t currentPhaseShift;
    volatile uint32_t targetIntervalUs;
+   volatile int32_t currentPhaseShift;
+   volatile int32_t averagePhaseShift;
+   volatile int32_t cumulativePhaseShift = 0;
+   int16_t phaseShiftHistory[256];
+   uint8_t syncPacketCount = 0;
    volatile bool syncPacketReceived;
-   
-   enum crsfConnectState {ELRS_PINGING, ELRS_STATS, ELRS_CONNECTED};
-   crsfConnectState connectionState = ELRS_PINGING;
-   uint32_t lastHandshakeTime = 0;   
-   uint32_t lastParameterQueryTime = 0;
-   bool parameterDiscoveryActive = false;
-   uint8_t currentSettingsIndex = 0;
-   uint8_t currentChunk = 0;
-   uint8_t chunksRemaining = 0;
-   uint8_t totalSettingsCount;
+   uint32_t lastSyncPacketTime = 0;
 
-   uint32_t lastValidFrameTime = 0;   
    uint32_t lastLinkStatsFrameTime = 0;   
    uint32_t lastLinkStatRequestTime = 0;
    uint32_t lastSyncPacketDisplay = 0;
 
-   void crsfQueuePacket(uint8_t packet[], uint8_t packetLength);
    void crsfWritePacket(uint8_t packet[], uint8_t packetLength);
-   void crsfProcessPacket();
-   //void crsfReadPacket();
-   void crsfPingDevices();
-   void crsfRequestElrsStatus();
-   void crsfRequestSetting(uint8_t settingIndex, uint8_t chunk);
    void crsfParseLinkStatsPacket(uint8_t rxBuffer[]);
-   void crsfParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length);
-   void crsfParseSettingsPacket(uint8_t rxBuffer[], uint8_t length);   
-   void crsfParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length);
    void crsfParseElrsSyncPacket(uint8_t rxBuffer[]);
-
-   int getParamSlot(uint8_t id); 
-   //uint8_t parseChoicesString(int slot, uint8_t* buffer, uint8_t startIdx, uint8_t maxLen);
-   void parseChoicesString(int paramIndex);
-   void clearModule();
 };
 
 // Declare your class object as external so the background serial handler can see it

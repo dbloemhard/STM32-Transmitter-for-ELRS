@@ -100,11 +100,11 @@ const float ON_USB = 4.5;          // On USB power / no battery
 // 17: Set Lua [Bind]=0 -> 
 
 // 3 Default Settings
-#define SETTING_1_PktRate 3 // 250Hz (-108dB)
-#define SETTING_1_Power 3   // 100mW
+#define SETTING_1_PktRate 6 // 500Hz (-105dB)
+#define SETTING_1_Power 5   // 500mW
 #define SETTING_1_Dynamic 1 // Dynamic power on
 
-#define SETTING_2_PktRate 0 // 50Hz (-115dB)
+#define SETTING_2_PktRate 3 // 250Hz (-108dB)
 #define SETTING_2_Power 3   // 100mW
 #define SETTING_2_Dynamic 0 // Dynamic power off
 

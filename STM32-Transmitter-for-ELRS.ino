@@ -27,11 +27,12 @@
 #include "EEPROM.h"
 #include "config.h"
 #include "crsf.h"
+#include "elrsLua.h"
 #include "led.h"
 #include "tone.h"
 
-#define DEBUG // if not commented out, Serial.print() is active! For debugging only!!
-//#define GIMBAL_CALIBRATION // if not commented out, Serial.print() is active! For debugging only!!
+//#define DEBUG // if not commented out, Serial.print() is active! For debugging only!!
+//#define TIMINGDEBUG  // When this is active Serial port will print out timing details
 
 int Aileron_value = 0; // values read from the pot
 int Elevator_value = 0;
@@ -71,12 +72,14 @@ bool calibrationRequested=false;
 uint32_t currentMillis = 0;
 uint32_t lastDisplayTime = 0;
 
-//uint8_t crsfPacket[CRSF_PACKET_SIZE];
-//uint8_t crsfCmdPacket[CRSF_CMD_PACKET_SIZE];
 int16_t rcChannels[CRSF_MAX_CHANNEL];
 uint32_t crsfTime = 0;
 uint32_t lastModuleRequestTime = 0;
 CRSF crsfClass;
+
+// Instantiate application layer, passing driver object to it
+ELRSLua elrsLua(crsfClass);
+
 // Headtracker Serial2
 //HardwareSerial Serial2(RX2, TX2);
 HardwareSerial HT_PORT(HT_RX, HT_TX);
@@ -764,11 +767,34 @@ void setup()
     calibrationLoad();
 }
 
+#ifdef TIMINGDEBUG
+uint32_t loopCounter = 0;
+uint32_t maxLoopTime = 0;
+uint32_t minLoopTime = 0;
+// uint32_t totLoopTime = 0;
+uint32_t maxElrsTime = 0;
+uint32_t minElrsTime = 0;
+// uint32_t totElrsTime = 0;
+// uint32_t elrsCounter = 0;
+uint32_t lastStatsPrintTime = 0;
+uint32_t totalTransmitFrames = 0;
+#endif
+uint32_t lastSyncPrintTime = 0;
+
 // -----------------------------------------------------------------------------------------------------
 // Main loop
 // -----------------------------------------------------------------------------------------------------
 void loop()
 {
+#ifdef TIMINGDEBUG
+    static uint32_t nextLogTimeUs = 0;
+    uint32_t nowUs = micros();
+
+    if (nextLogTimeUs = 0) nextLogTimeUs = nowUs + 4000;
+    loopCounter++;
+    if (nowUs >= nextLogTimeUs) {
+    uint32_t startLoopUs = micros();
+#endif
     // melody player needs to be first in the loop in order to play correctly.
     rtttl::play();
 
@@ -803,56 +829,79 @@ void loop()
         // Read AUX channels
         getAUXInputs();
 
+#ifdef DEBUG        
         // Debug data
-        //logData();
-        
+        logData();
+#endif
+ 
+        // ---------------------------------------------------------------------------
         // Read Telemetry data every loop (telemetry processed in crsfCheckTelemetry)
         crsfClass.crsfReadTelemetry();
 
-        // ----------------------------------
+        // -------------------------------------------------
+        // Poll the telemetry data and run lua script logic
+        elrsLua.update();       
+
+        // --------------------------------
         // Send RC data to external module
         uint32_t currentMicros = micros();
         if (currentMicros > crsfTime) {
-            if (loopCount <= 500) { // repeat 500 packets to build connection to TX module
-                crsfClass.crsfSendChannels(rcChannels);
-                loopCount++;
-            } else if (loopCount > 500 && loopCount <= 505) { // repeat 5 packets to avoid bad packet, change rate setting
-                if (currentSetting == 1 || currentSetting == 2) {
-                    crsfClass.crsfSendCommand(ELRS_PKT_RATE_COMMAND, currentPktRate);
-                } else if (currentSetting == 3) {
-                    crsfClass.crsfSendCommand(ELRS_BIND_COMMAND, ELRS_START_COMMAND);
-                } else if (currentSetting == 4) {
-                    crsfClass.crsfSendCommand(ELRS_WIFI_COMMAND, ELRS_START_COMMAND);
-                }
-                loopCount++;
-            } else if (loopCount > 505 && loopCount <= 510) { // repeat 5 packets to avoid bad packet, change TX power level
-                if (currentSetting == 1 || currentSetting == 2) {
-                    crsfClass.crsfSendCommand(ELRS_POWER_COMMAND, currentPower);
-                }
-                loopCount++;
-            } else if (loopCount > 510 && loopCount <= 515) { // repeat 5 packets to avoid bad packet, change TX dynamic power setting
-                if (currentSetting == 1 || currentSetting == 2) {
-                    crsfClass.crsfSendCommand(ELRS_DYNAMIC_POWER_COMMAND, currentDynamic);
-                }
-                loopCount++;
+            // Command packet interleaving
+            if (crsfClass.commandQueue.hasItems()) {
+                crsfClass.crsfSendQueuedCommand();
             } else {
                 crsfClass.crsfSendChannels(rcChannels);
             }
 
-            // Process one telemetry command after sending channels
-            crsfClass.crsfCheckTelemetry();
-
-            // Send commands to initiate module after 5 seconds, if not already done
-            if (!crsfClass.ready && millis() > 5000) {
-                crsfClass.crsfInitModule();
-            }            
-               
-            // Command packet interleaving
-            crsfClass.crsfSendPendingCommand();
-
-            crsfTime = currentMicros + crsfClass.crsfNextInterval(); //CRSF_TIME_BETWEEN_FRAMES_US;
+#ifdef TIMINGDEBUG
+            uint32_t elrsTime = micros() - currentMicros;
+            if (elrsTime > maxElrsTime) maxElrsTime = elrsTime;
+            if ((elrsTime < minElrsTime) || minLoopTime == 0) minElrsTime = elrsTime;
+#endif
+            uint32_t adjustment = crsfClass.crsfNextInterval();
+            crsfTime = currentMicros + adjustment; //CRSF_TIME_BETWEEN_FRAMES_US;
+#ifdef DEBUG
+            if (millis() - lastSyncPrintTime > 2000) {
+                Serial.println("\n============ [Loop timing] ============");
+                Serial.print("Next Interval : "); Serial.print(adjustment); Serial.println(" microseconds");
+                Serial.println("=======================================");
+                lastSyncPrintTime = millis();
+            }
+#endif
         }
     } // Not calibrating
+#ifdef TIMINGDEBUG
+    uint32_t elapsedUs = micros() - startLoopUs;
+    if (elapsedUs > maxLoopTime) maxLoopTime = elapsedUs;
+    if ((elapsedUs < minLoopTime) || minLoopTime == 0) minLoopTime = elapsedUs;
+    totalTransmitFrames++;
+    // Push the target grid perfectly forward by 4000us (prevents error drift)
+    nextLogTimeUs += 4000; 
+    }
+  // ---------------------------------------------------------------------------
+  if (millis() - lastStatsPrintTime > 5000) {
+    lastStatsPrintTime = millis();
+    
+    Serial.println("\n============ [HANDSET PERFORMANCE METRICS] ============");
+    Serial.print("Max Loop Duration : "); Serial.print(maxLoopTime); Serial.println(" microseconds");
+    Serial.print("Min Loop Duration : "); Serial.print(minLoopTime); Serial.println(" microseconds");
+    Serial.print("Avg Loop Duration : "); Serial.print(5000000/totalTransmitFrames); Serial.println(" microseconds");
+    Serial.print("Total Transmit Frames   : "); Serial.println(totalTransmitFrames);
+    Serial.print("Max ELRS Duration : "); Serial.print(maxElrsTime); Serial.println(" microseconds");
+    Serial.print("Min ELRS Duration : "); Serial.print(minElrsTime); Serial.println(" microseconds");
+    Serial.print("Avg ELRS Duration : "); Serial.print(5000000/loopCount); Serial.println(" microseconds");
+    Serial.print("Total ELRS Frames   : "); Serial.println(loopCount);
+    Serial.println("=======================================================");
+    
+    // Reset max peak-hold values to check for performance dips in the next window
+    maxLoopTime = 0;
+    minLoopTime = 0;
+    maxElrsTime = 0;
+    minElrsTime = 0;
+    totalTransmitFrames = 0;
+    loopCount = 0;
+  }    
+#endif
 }
 
 #ifdef PPMOUTPUT
