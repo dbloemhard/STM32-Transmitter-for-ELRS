@@ -21,8 +21,9 @@
 ELRSLua::ELRSLua(CRSF& crsfInstance) : crsf(crsfInstance) {}
 
 
-// prepare elrs setup packet (power, packet rate...)
-//void CRSF::crsfPrepareCmdPacket(uint8_t packetCmd[], uint8_t command, uint8_t value) {
+// Command builder functions
+// ========================================================
+
 void ELRSLua::SendCommand(uint8_t command, uint8_t value) {
     uint8_t packetCmd[CRSF_CMD_PACKET_SIZE];
 
@@ -78,6 +79,10 @@ void ELRSLua::RequestElrsStatus() {
     SendCommand(0,0);
 }
 
+
+// Response Parser functions
+// ========================================================
+
 void ELRSLua::ParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
   // Clear any existing stored text profile settings
   memset(txModule.name, 0, sizeof(txModule.name)); 
@@ -126,93 +131,6 @@ void ELRSLua::ParseDeviceInfoPacket(uint8_t rxBuffer[], uint8_t length) {
     Serial.println("================================================\n");
 #endif
   }
-}
-
-void ELRSLua::clearModule() {
-    memset(txModule.name, 0, sizeof(txModule.name));   
-    for (int i = 0; i < txModule.paramCount; i++) {
-        txModule.params[i].id = 0;
-        txModule.params[i].parentFolder = 0;
-        txModule.params[i].type = static_cast<crsfValueType>(0);
-        txModule.params[i].currentVal = 0;
-        memset(txModule.params[i].label, 0, sizeof(txModule.params[i].label)); 
-        for (int j = 0; j < txModule.params[i].choicesCount; j++) {
-            memset(txModule.params[i].choices[j].text, 0, sizeof(txModule.params[i].choices[j].text)); 
-        }
-        txModule.params[i].choicesCount = 0;
-    }
-    txModule.paramCount = 0;
-    txModule.paramsLoaded = false;
-    moduleInfoReceived = false;
-    // serialNumber, hwVersion, swVersion, protocolVersion will be reset when a module is next detected
-}
-
-void ELRSLua::parseChoicesString(int paramIndex) {
-    uint8_t currentIdx = 0;
-    uint8_t activeOptionSlot = 0;
-    uint8_t charCount = 0;
-    txModule.params[paramIndex].choicesCount = 0;
-
-    // Keep parsing until we hit the end of the packet payload max length
-    while (currentIdx < CRSF_MAX_PARAM_DATA_LEN) {
-        char c = txModule.params[paramIndex].valueString[currentIdx++];
-        
-        if (c == 0x00) {
-            // Seal the final string choice segment and return.
-            txModule.params[paramIndex].choices[activeOptionSlot].text[charCount] = '\0';
-            txModule.params[paramIndex].choicesCount = activeOptionSlot + 1;
-            return; 
-        }
-        else if (c == ';') {
-            // Semicolon delimiter encountered: seal the current choice string segment
-            txModule.params[paramIndex].choices[activeOptionSlot].text[charCount] = '\0';
-            
-            // Advance to the next safe storage choice slot parameter bounds
-            if (activeOptionSlot < (CRSF_MAX_PARAMS - 1)) {
-                activeOptionSlot++;
-            }
-            charCount = 0;
-        } 
-        else {
-            if (charCount < (CRSF_MAX_STRING_LEN - 1)) {
-                txModule.params[paramIndex].choices[activeOptionSlot].text[charCount++] = c;
-            }
-        }
-    }
-   
-}
-
-int ELRSLua::getParamSlot(uint8_t id) {
-    // 1. Search if this parameter ID is already initialized
-    for (int i = 0; i < txModule.paramCount; i++) {
-        if (txModule.params[i].id == id) return i;
-    }
-    // 2. If it's a new ID, allocate a fresh index slot if we have space left
-    if (txModule.paramCount < CRSF_MAX_PARAMS) {
-        int freshSlot = txModule.paramCount;
-        txModule.params[freshSlot].id = id;
-        // Initialize all parameter data
-        txModule.params[freshSlot].parentFolder = 0;
-        txModule.params[freshSlot].type = static_cast<crsfValueType>(0);
-        txModule.params[freshSlot].currentVal = 0;
-        txModule.params[freshSlot].minVal = 0;
-        txModule.params[freshSlot].maxVal = 0;
-        txModule.params[freshSlot].precision = 0;
-        txModule.params[freshSlot].step = 0;
-        txModule.params[freshSlot].timeout = 0;
-        memset(txModule.params[freshSlot].label, 0, sizeof(txModule.params[freshSlot].label));
-        memset(txModule.params[freshSlot].valueString, 0, sizeof(txModule.params[freshSlot].valueString));
-        txModule.params[freshSlot].valueStringCharCount = 0;
-        memset(txModule.params[freshSlot].units, 0, sizeof(txModule.params[freshSlot].units));
-        memset(txModule.params[freshSlot].choices, 0, sizeof(txModule.params[freshSlot].choices));
-        txModule.params[freshSlot].choicesCount = 0;
-        txModule.paramCount++;
-        return freshSlot;
-    } 
-    else {
-      Serial.println("Exceeded max parameter count. Cannot allocate free slot.");
-    }
-    return -1; // Out of safe tracking memory space
 }
 
 void ELRSLua::ParseSettingsPacket(uint8_t rxBuffer[], uint8_t length) {
@@ -468,6 +386,103 @@ void ELRSLua::ParseElrsStatusPacket(uint8_t rxBuffer[], uint8_t length) {
     Serial.println("=================================================");
 #endif
 }
+
+
+
+// Response Parser functions
+// ========================================================
+
+void ELRSLua::clearModule() {
+    memset(txModule.name, 0, sizeof(txModule.name));   
+    for (int i = 0; i < txModule.paramCount; i++) {
+        txModule.params[i].id = 0;
+        txModule.params[i].parentFolder = 0;
+        txModule.params[i].type = static_cast<crsfValueType>(0);
+        txModule.params[i].currentVal = 0;
+        memset(txModule.params[i].label, 0, sizeof(txModule.params[i].label)); 
+        for (int j = 0; j < txModule.params[i].choicesCount; j++) {
+            memset(txModule.params[i].choices[j].text, 0, sizeof(txModule.params[i].choices[j].text)); 
+        }
+        txModule.params[i].choicesCount = 0;
+    }
+    txModule.paramCount = 0;
+    txModule.paramsLoaded = false;
+    moduleInfoReceived = false;
+    // serialNumber, hwVersion, swVersion, protocolVersion will be reset when a module is next detected
+}
+
+void ELRSLua::parseChoicesString(int paramIndex) {
+    uint8_t currentIdx = 0;
+    uint8_t activeOptionSlot = 0;
+    uint8_t charCount = 0;
+    txModule.params[paramIndex].choicesCount = 0;
+
+    // Keep parsing until we hit the end of the packet payload max length
+    while (currentIdx < CRSF_MAX_PARAM_DATA_LEN) {
+        char c = txModule.params[paramIndex].valueString[currentIdx++];
+        
+        if (c == 0x00) {
+            // Seal the final string choice segment and return.
+            txModule.params[paramIndex].choices[activeOptionSlot].text[charCount] = '\0';
+            txModule.params[paramIndex].choicesCount = activeOptionSlot + 1;
+            return; 
+        }
+        else if (c == ';') {
+            // Semicolon delimiter encountered: seal the current choice string segment
+            txModule.params[paramIndex].choices[activeOptionSlot].text[charCount] = '\0';
+            
+            // Advance to the next safe storage choice slot parameter bounds
+            if (activeOptionSlot < (CRSF_MAX_PARAMS - 1)) {
+                activeOptionSlot++;
+            }
+            charCount = 0;
+        } 
+        else {
+            if (charCount < (CRSF_MAX_STRING_LEN - 1)) {
+                txModule.params[paramIndex].choices[activeOptionSlot].text[charCount++] = c;
+            }
+        }
+    }
+   
+}
+
+int ELRSLua::getParamSlot(uint8_t id) {
+    // 1. Search if this parameter ID is already initialized
+    for (int i = 0; i < txModule.paramCount; i++) {
+        if (txModule.params[i].id == id) return i;
+    }
+    // 2. If it's a new ID, allocate a fresh index slot if we have space left
+    if (txModule.paramCount < CRSF_MAX_PARAMS) {
+        int freshSlot = txModule.paramCount;
+        txModule.params[freshSlot].id = id;
+        // Initialize all parameter data
+        txModule.params[freshSlot].parentFolder = 0;
+        txModule.params[freshSlot].type = static_cast<crsfValueType>(0);
+        txModule.params[freshSlot].currentVal = 0;
+        txModule.params[freshSlot].minVal = 0;
+        txModule.params[freshSlot].maxVal = 0;
+        txModule.params[freshSlot].precision = 0;
+        txModule.params[freshSlot].step = 0;
+        txModule.params[freshSlot].timeout = 0;
+        memset(txModule.params[freshSlot].label, 0, sizeof(txModule.params[freshSlot].label));
+        memset(txModule.params[freshSlot].valueString, 0, sizeof(txModule.params[freshSlot].valueString));
+        txModule.params[freshSlot].valueStringCharCount = 0;
+        memset(txModule.params[freshSlot].units, 0, sizeof(txModule.params[freshSlot].units));
+        memset(txModule.params[freshSlot].choices, 0, sizeof(txModule.params[freshSlot].choices));
+        txModule.params[freshSlot].choicesCount = 0;
+        txModule.paramCount++;
+        return freshSlot;
+    } 
+    else {
+      Serial.println("Exceeded max parameter count. Cannot allocate free slot.");
+    }
+    return -1; // Out of safe tracking memory space
+}
+
+
+
+// Main driver function
+// ========================================================
 
 void ELRSLua::update() {
     // First poll for incoming telemetry packets

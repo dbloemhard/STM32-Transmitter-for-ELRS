@@ -262,7 +262,7 @@ uint32_t CRSF::crsfNextInterval() {
         //       correction = currentPhaseShift;
         //     }
         // }
-        int32_t correction = -200;
+        int32_t correction = -(int32_t)baseInterval/10;  // Simple correction value based on loop timing observations
         // Return the dynamic duration for the *next* single loop cycle
         return baseInterval + correction;
 }

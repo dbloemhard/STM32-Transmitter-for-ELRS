@@ -6,7 +6,7 @@ Simple TX is an Arduino based ELRS RC transmitter TX by Kkbin505. He designed an
 I am rewriting it to run on an STM32 F411CE "Black Pill" and hopefully also on an ESP32 C3. Since we now have extra UARTs, and even OLED screens, i am reading telemetry from the ELRS module, to display, and modify as required. I already have a fork of his project to add ELRS 3.x support, so this is a 'new' repository (large swathes are being rewritten).
 
 # THIS IS A W.I.P.
-Currently untested. ELRS transmitter telemetry isnt working that well
+Currently untested. ELRS transmitter telemetry is working, and the configuration items are being loaded, but I havent coded the menu navigation or changing settings.
 
 Programmed in Arduino IDE since that is simple. 
 1. Install the STM32 MCU Based Boards by STMicroelectronics via board manager

@@ -99,17 +99,19 @@
 #define LUA_SCRIPT_ADDRESS              0xEF
 #define BROADCAST_ADDRESS               0x00
 
-// ELRS commands
+// ELRS commands (for Jumper Aion ELRS3.6.0)
 #define ELRS_PKT_RATE_COMMAND           0x01
 #define ELRS_TLM_RATIO_COMMAND          0x02
 #define ELRS_SWITCH_MODE_COMMAND        0x03
-#define ELRS_MODEL_MATCH_COMMAND        0x04
-#define ELRS_POWER_COMMAND              0x06
-#define ELRS_DYNAMIC_POWER_COMMAND      0x07
-#define ELRS_BLE_JOYSTIC_COMMAND        0x11 //  Not on ESP8266
-#define ELRS_WIFI_COMMAND               0x0F
-#define ELRS_BIND_COMMAND               0x11
+#define ELRS_MODEL_MATCH_COMMAND        0x05
+#define ELRS_POWER_COMMAND              0x07
+#define ELRS_DYNAMIC_POWER_COMMAND      0x08
+#define ELRS_WIFI_COMMAND               0x10
+#define ELRS_RXWIFI_COMMAND             0x11
+#define ELRS_BLE_JOYSTIC_COMMAND        0x12 //  Not on ESP8266
+#define ELRS_BIND_COMMAND               0x13
 #define ELRS_START_COMMAND              0x04
+#define ELRS_END_COMMAND                0x05
 #define ELRS_SETTINGS_WRITE             0x2D
 #define SYNC_BYTE                       0xC8
 
@@ -218,7 +220,95 @@ private:
 extern CRSF crsfClass;
 
 
-/* ESP32 Team900
+/* 
+LUA debug output
+
+[ELRS] -> Querying Menu Parameter Index: 0, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] HooJ | Menu (ID: 0)
+[ELRS] -> Querying Menu Parameter Index: 1, chunk: 0
+Received Packet type 0x2B
+Chunk stored[ELRS] -> Querying Menu Parameter Index: 1, chunk: 1
+Received Packet type 0x2B
+Chunk stored[ELRS] -> Querying Menu Parameter Index: 1, chunk: 2
+Received Packet type 0x2B
+Chunk stored[ELRS] -> Querying Menu Parameter Index: 1, chunk: 3
+Received Packet type 0x2B
+[PARAMETER SAVED] Packet Rate | Choices(0-9): 50Hz(-115dBm), 100Hz Full(-112dBm), 150Hz(-112dBm), 250Hz(-108dBm), 333Hz Full(-105dBm), 500Hz(-105dBm), D250(-104dBm), D500(-104dBm), F500(-104dBm), F1000(-104dBm) | Active Selection: 500Hz(-105dBm)
+[ELRS] -> Querying Menu Parameter Index: 2, chunk: 0
+Received Packet type 0x2B
+Chunk stored[ELRS] -> Querying Menu Parameter Index: 2, chunk: 1
+Received Packet type 0x2B
+[PARAMETER SAVED] Telem Ratio | Choices(0-9): Std, Off, 1:128, 1:64, 1:32, 1:16, 1:8, 1:4, 1:2, Race | Active Selection: 1:32 (546bps)
+[ELRS] -> Querying Menu Parameter Index: 3, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Switch Mode | Choices(0-1): Wide, Hybrid | Active Selection: Wide
+[ELRS] -> Querying Menu Parameter Index: 4, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Link Mode | Choices(0-1): Normal, MAVLink | Active Selection: Normal
+[ELRS] -> Querying Menu Parameter Index: 5, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Model Match | Choices(0-1): Off, On | Active Selection: Off (ID: 0)
+[ELRS] -> Querying Menu Parameter Index: 6, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] TX Power (100mW Dyn) | Menu (ID: 6)
+[ELRS] -> Querying Menu Parameter Index: 7, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Max Power | Choices(0-5): 10, 25, 50, 100, 250, 500 | Active Selection: 100mW
+[ELRS] -> Querying Menu Parameter Index: 8, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Dynamic | Choices(0-5): Off, Dyn, AUX9, AUX10, AUX11, AUX12 | Active Selection: Dyn
+[ELRS] -> Querying Menu Parameter Index: 9, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] VTX Administrator | Menu (ID: 9)
+[ELRS] -> Querying Menu Parameter Index: 10, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Band | Choices(0-6): Off, A, B, E, F, R, L | Active Selection: Off
+[ELRS] -> Querying Menu Parameter Index: 11, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Channel (1-8): 1
+[ELRS] -> Querying Menu Parameter Index: 12, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Pwr Lvl | Choices(0-8): -, 1, 2, 3, 4, 5, 6, 7, 8 | Active Selection: -
+[ELRS] -> Querying Menu Parameter Index: 13, chunk: 0
+Received Packet type 0x2B
+Chunk stored[ELRS] -> Querying Menu Parameter Index: 13, chunk: 1
+Received Packet type 0x2B
+Chunk stored[ELRS] -> Querying Menu Parameter Index: 13, chunk: 2
+Received Packet type 0x2B
+[PARAMETER SAVED] Pitmode | Choices(0-21): Off, On, AUX1�, AUX1�, AUX2�, AUX2�, AUX3�, AUX3�, AUX4�, AUX4�, AUX5�, AUX5�, AUX6�, AUX6�, AUX7�, AUX7�, AUX8�, AUX8�, AUX9�, AUX9�, AUX10�, AUX10� | Active Selection: Off
+[ELRS] -> Querying Menu Parameter Index: 14, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Send VTx | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+[ELRS] -> Querying Menu Parameter Index: 15, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] WiFi Connectivity | Menu (ID: 15)
+[ELRS] -> Querying Menu Parameter Index: 16, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Enable WiFi | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+[ELRS] -> Querying Menu Parameter Index: 17, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Enable Rx WiFi | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+[ELRS] -> Querying Menu Parameter Index: 18, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] BLE Joystick | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+[ELRS] -> Querying Menu Parameter Index: 19, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Bind | Command (Current state IDLE | Timeout 2000 | Info/Status : )
+[ELRS] -> Querying Menu Parameter Index: 20, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] Bad/Good | Info String: 0/126
+[ELRS] -> Querying Menu Parameter Index: 21, chunk: 0
+Received Packet type 0x2B
+[PARAMETER SAVED] 3.6.0 ISM2G4 | Info String: ff41f6
+[ELRS] >>> PARAMETER TREE MATRIX FULLY POPULATED AND CACHED <<<
+
+
+
+
+
+
+ESP32 Team900
 https://github.com/danxdz/simpleTx_esp32/blob/master/src/Simple_TX.cpp
 
 // buildElrsPacket(crsfCmdPacket,X,3);
@@ -350,7 +440,5 @@ Main Menu
 |- Bind
 |- Bad/Good
 |- 3.1.2 EU868
-
-
 
 */

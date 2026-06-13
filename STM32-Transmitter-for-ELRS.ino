@@ -64,10 +64,16 @@ int currentPktRate = 0;
 int currentPower = 0;
 int currentDynamic = 0;
 int currentSetting = 0;
+bool bindStarted = false;
+bool wifiStarted = false;
 int stickMoved = 0;
 int stickInt = 0;
 uint32_t stickMovedMillis = 0;
 bool calibrationRequested=false;
+
+bool lastArmState = false;        // Tracks previous arm switch position
+uint32_t armTimer = 0;            // Records when the switch was turned on
+bool gestureTriggerReady = false; // Arming arm-switch trigger sequence flag
 
 uint32_t currentMillis = 0;
 uint32_t lastDisplayTime = 0;
@@ -480,10 +486,12 @@ void getAUXInputs(){
     /*
      * Handle digital input
      */
+
     AUX1_Arm = digitalRead(DIGITAL_PIN_SWITCH_ARM);
     if (Is_Arm_Reverse == 1) {
       AUX1_Arm = ~AUX1_Arm;
     }
+
     AUX2_value = digitalRead(DIGITAL_PIN_SWITCH_AUX2);
     AUX3_value = digitalRead(DIGITAL_PIN_SWITCH_AUX3);
     if (DIGITAL_PIN_SWITCH_AUX4 != 0){
@@ -507,6 +515,26 @@ void getAUXInputs(){
 // -----------------------------------------------------------------------------------------------------
 // Startup stick commands
 // -----------------------------------------------------------------------------------------------------
+void checkGestureSetting() {
+    bool currentArmState = AUX1_Arm; 
+
+    // 1. Detect the moment the switch goes from DISARMED to ARMED (Rising Edge)
+    if (currentArmState && !lastArmState) {
+        armTimer = millis();
+        gestureTriggerReady = true; 
+    }
+
+    // 2. Detect the moment the switch goes from ARMED back to DISARMED (Falling Edge)
+    if (!currentArmState && lastArmState) {
+        // Debounce: Ensure it was held armed for at least 1000ms
+        if (gestureTriggerReady && (millis() - armTimer >= 1000)) {
+            selectSetting(); 
+            gestureTriggerReady = false; 
+        }
+    }
+    lastArmState = currentArmState;
+}
+
 void selectSetting() {
     // startup stick commands (rate/power selection / initiate bind / turn on tx module wifi)
     // Right stick:
@@ -518,21 +546,48 @@ void selectSetting() {
     // Throttle MAX - Enable Head Tracking (if defines are set)
 
     if (rcChannels[AILERON] < RC_MIN_COMMAND && rcChannels[ELEVATOR] > RC_MAX_COMMAND) { // Elevator up + aileron left
-        currentPktRate = SETTING_1_PktRate;
-        currentPower = SETTING_1_Power;
-        currentDynamic = SETTING_1_Dynamic;
-        currentSetting = 1;
+        // currentPktRate = SETTING_1_PktRate;
+        // currentPower = SETTING_1_Power;
+        // currentDynamic = SETTING_1_Dynamic;
+        // currentSetting = 1;
+        crsfClass.crsfSendCommand(ELRS_PKT_RATE_COMMAND, SETTING_1_PktRate);
+        crsfClass.crsfSendCommand(ELRS_POWER_COMMAND, SETTING_1_Power);
+        crsfClass.crsfSendCommand(ELRS_DYNAMIC_POWER_COMMAND, SETTING_1_Dynamic);
     } else if (rcChannels[AILERON] > RC_MAX_COMMAND && rcChannels[ELEVATOR] > RC_MAX_COMMAND) { // Elevator up + aileron right
-        currentPktRate = SETTING_2_PktRate;
-        currentPower = SETTING_2_Power;
-        currentDynamic = SETTING_2_Dynamic;
-        currentSetting = 2;
+        // currentPktRate = SETTING_2_PktRate;
+        // currentPower = SETTING_2_Power;
+        // currentDynamic = SETTING_2_Dynamic;
+        // currentSetting = 2;
+        crsfClass.crsfSendCommand(ELRS_PKT_RATE_COMMAND, SETTING_2_PktRate);
+        crsfClass.crsfSendCommand(ELRS_POWER_COMMAND, SETTING_2_Power);
+        crsfClass.crsfSendCommand(ELRS_DYNAMIC_POWER_COMMAND, SETTING_2_Dynamic);
     } else if (rcChannels[AILERON] < RC_MIN_COMMAND && rcChannels[ELEVATOR] < RC_MIN_COMMAND) { // Elevator down + aileron left
-        currentSetting = 3;  // Bind
+        // currentSetting = 3;  // Bind
+        if (!wifiStarted) {  // cant start bind while wifi is active
+            if (bindStarted) {
+                crsfClass.crsfSendCommand(ELRS_BIND_COMMAND, ELRS_END_COMMAND);
+                bindStarted = false;
+            }
+            else {
+                crsfClass.crsfSendCommand(ELRS_BIND_COMMAND, ELRS_START_COMMAND);
+                bindStarted = true;
+            }
+        }
     } else if (rcChannels[AILERON] > RC_MAX_COMMAND && rcChannels[ELEVATOR] < RC_MIN_COMMAND) { // Elevator down + aileron right
-        currentSetting = 4;  // TX Wifi
-    } else {
-        currentSetting = 0;
+        // currentSetting = 4;  // TX Wifi
+        crsfClass.crsfSendCommand(ELRS_WIFI_COMMAND, ELRS_START_COMMAND);
+        if (!bindStarted) {  // cant start bind while wifi is active
+            if (wifiStarted) {
+                crsfClass.crsfSendCommand(ELRS_WIFI_COMMAND, ELRS_END_COMMAND);
+                wifiStarted = false;
+            }
+            else {
+                crsfClass.crsfSendCommand(ELRS_WIFI_COMMAND, ELRS_START_COMMAND);
+                wifiStarted = true;
+            }
+        }
+    // } else {
+    //     currentSetting = 0;
     }
 
     // override stick data with SBUS data when throttle is held high during power on
@@ -821,13 +876,15 @@ void loop()
         // map sticks/SBUS data to rcChannels
         mapChannels();
 
-        if (loopCount == 0) {
-        // Check if sticks are held in specific position on startup (bind/wifi/packet rate select)
-            selectSetting();
-        }
-
         // Read AUX channels
         getAUXInputs();
+
+        //if (loopCount == 0) {
+        // Check if sticks are held in specific position on startup (bind/wifi/packet rate select)
+        //    selectSetting();
+        //}
+        // Check for quick settings change via arm toggle gesture
+        checkGestureSetting(); 
 
 #ifdef DEBUG        
         // Debug data
@@ -878,29 +935,29 @@ void loop()
     // Push the target grid perfectly forward by 4000us (prevents error drift)
     nextLogTimeUs += 4000; 
     }
-  // ---------------------------------------------------------------------------
-  if (millis() - lastStatsPrintTime > 5000) {
-    lastStatsPrintTime = millis();
-    
-    Serial.println("\n============ [HANDSET PERFORMANCE METRICS] ============");
-    Serial.print("Max Loop Duration : "); Serial.print(maxLoopTime); Serial.println(" microseconds");
-    Serial.print("Min Loop Duration : "); Serial.print(minLoopTime); Serial.println(" microseconds");
-    Serial.print("Avg Loop Duration : "); Serial.print(5000000/totalTransmitFrames); Serial.println(" microseconds");
-    Serial.print("Total Transmit Frames   : "); Serial.println(totalTransmitFrames);
-    Serial.print("Max ELRS Duration : "); Serial.print(maxElrsTime); Serial.println(" microseconds");
-    Serial.print("Min ELRS Duration : "); Serial.print(minElrsTime); Serial.println(" microseconds");
-    Serial.print("Avg ELRS Duration : "); Serial.print(5000000/loopCount); Serial.println(" microseconds");
-    Serial.print("Total ELRS Frames   : "); Serial.println(loopCount);
-    Serial.println("=======================================================");
-    
-    // Reset max peak-hold values to check for performance dips in the next window
-    maxLoopTime = 0;
-    minLoopTime = 0;
-    maxElrsTime = 0;
-    minElrsTime = 0;
-    totalTransmitFrames = 0;
-    loopCount = 0;
-  }    
+    // ---------------------------------------------------------------------------
+    if (millis() - lastStatsPrintTime > 5000) {
+        lastStatsPrintTime = millis();
+        
+        Serial.println("\n============ [HANDSET PERFORMANCE METRICS] ============");
+        Serial.print("Max Loop Duration : "); Serial.print(maxLoopTime); Serial.println(" microseconds");
+        Serial.print("Min Loop Duration : "); Serial.print(minLoopTime); Serial.println(" microseconds");
+        Serial.print("Avg Loop Duration : "); Serial.print(5000000/totalTransmitFrames); Serial.println(" microseconds");
+        Serial.print("Total Transmit Frames   : "); Serial.println(totalTransmitFrames);
+        Serial.print("Max ELRS Duration : "); Serial.print(maxElrsTime); Serial.println(" microseconds");
+        Serial.print("Min ELRS Duration : "); Serial.print(minElrsTime); Serial.println(" microseconds");
+        Serial.print("Avg ELRS Duration : "); Serial.print(5000000/loopCount); Serial.println(" microseconds");
+        Serial.print("Total ELRS Frames   : "); Serial.println(loopCount);
+        Serial.println("=======================================================");
+        
+        // Reset max peak-hold values to check for performance dips in the next window
+        maxLoopTime = 0;
+        minLoopTime = 0;
+        maxElrsTime = 0;
+        minElrsTime = 0;
+        totalTransmitFrames = 0;
+        loopCount = 0;
+    }    
 #endif
 }
 

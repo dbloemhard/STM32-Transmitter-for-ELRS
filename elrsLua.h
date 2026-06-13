@@ -124,20 +124,20 @@ struct crsfModule {
 class ELRSLua {
 public:
     // Properties
-    crsfElrsStatus elrsStatus;
-    bool moduleInfoReceived = false;
     bool ready() const { return connectionState == ELRS_READY; }
     bool showMenu = false;
-    //bool ready = false;
     crsfModule txModule;
+    crsfElrsStatus elrsStatus;
+
     // Methods
     ELRSLua(CRSF& crsfInstance);   // initializer - pass in the CRSF instance so it can call its references.
-    void update();
+    void update();                 // driver function
 private:
     CRSF& crsf;  // Reference link to the CRSF instance
     
     enum crsfConnectState {ELRS_BOOT_DELAY, ELRS_PINGING, ELRS_CONNECTED, ELRS_READY};
     crsfConnectState connectionState = ELRS_BOOT_DELAY;
+    bool moduleInfoReceived = false;
     uint32_t lastHandshakeTime = 0;   
     uint32_t lastParameterQueryTime = 0;
     bool parameterDiscoveryActive = false;
@@ -165,6 +165,3 @@ private:
     void parseChoicesString(int paramIndex);
     void clearModule();
 };
-
-// Declare your class object as external so the background serial handler can see it
-//extern ELRSLua elrsLua;
